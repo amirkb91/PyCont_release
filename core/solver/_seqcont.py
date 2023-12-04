@@ -28,8 +28,10 @@ def seqcont(self):
         tau_pred = tau + step * stepsign
         X_pred = dp(X)
 
-        if (omega / tau_pred > self.prob.cont_params["continuation"]["fmax"] or
-                omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]):
+        if (
+            omega / tau_pred > self.prob.cont_params["continuation"]["fmax"]
+            or omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]
+        ):
             print("Frequency outside of specified boundary.")
             break
 
@@ -50,12 +52,13 @@ def seqcont(self):
                 break
 
             residual = spl.norm(H)
-            if (residual < self.prob.cont_params["continuation"]["tol"] and
-                    itercorrect >= self.prob.cont_params["continuation"]["itermin"]):
+            if (
+                residual < self.prob.cont_params["continuation"]["tol"]
+                and itercorrect >= self.prob.cont_params["continuation"]["itermin"]
+            ):
                 cvg_cont = True
                 break
-            elif (itercorrect > self.prob.cont_params["continuation"]["itermax"] or
-                  residual > 1e10):
+            elif itercorrect > self.prob.cont_params["continuation"]["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
             self.log.screenout(

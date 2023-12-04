@@ -164,8 +164,7 @@ class Logger:
                 self.ax[2].xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
                 self.ln.append(
                     self.ax[2].plot(
-                        range(1,
-                              len(beta) + 1), beta, marker=".", fillstyle="none", color="red"
+                        range(1, len(beta) + 1), beta, marker=".", fillstyle="none", color="red"
                     )
                 )
             plt.pause(0.01)

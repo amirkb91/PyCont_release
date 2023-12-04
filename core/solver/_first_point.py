@@ -138,9 +138,9 @@ def first_point(self):
                 J[-1, -1] = 1
                 Z = np.zeros((np.shape(J)[0], 1))
                 Z[-1] = 1
-                self.tgt0 = spl.lstsq(
-                    J, Z, cond=None, check_finite=False, lapack_driver="gelsd"
-                )[0][:, 0]
+                self.tgt0 = spl.lstsq(J, Z, cond=None, check_finite=False, lapack_driver="gelsd")[
+                    0
+                ][:, 0]
                 self.tgt0 /= spl.norm(self.tgt0)
 
             self.log.screenout(

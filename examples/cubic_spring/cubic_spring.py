@@ -20,10 +20,10 @@ class Cubic_Spring:
     @classmethod
     def system_ode(cls, t, X):
         # State equation of the mass spring system. Xdot(t) = g(X(t))
-        x = X[:cls.ndof_free]
-        xdot = X[cls.ndof_free:]
+        x = X[: cls.ndof_free]
+        xdot = X[cls.ndof_free :]
         KX = cls.K @ x
-        fnl = np.array([cls.Knl * x[0]**3, 0])
+        fnl = np.array([cls.Knl * x[0] ** 3, 0])
         Xdot = np.concatenate((xdot, -cls.Minv @ (KX + fnl)))
         return Xdot
 
@@ -43,13 +43,13 @@ class Cubic_Spring:
         x = X[:N]
         xdot = X[N:]
         KX = K @ x
-        fnl = np.array([cls.Knl * x[0]**3, 0])
+        fnl = np.array([cls.Knl * x[0] ** 3, 0])
         Xdot = np.concatenate((xdot, -Minv @ (KX + fnl)))
         dgdz = np.array(
             [
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
-                [-1 / M[0, 0] * (K[0, 0] + knl * 3 * x[0]**2), -1 / M[0, 0] * K[0, 1], 0, 0],
+                [-1 / M[0, 0] * (K[0, 0] + knl * 3 * x[0] ** 2), -1 / M[0, 0] * K[0, 1], 0, 0],
                 [-1 / M[1, 1] * K[1, 0], -1 / M[1, 1] * K[1, 1], 0, 0],
             ]
         )
@@ -108,7 +108,7 @@ class Cubic_Spring:
         for i in range(nsteps * nperiod + 1):
             x = Xsol[i, :N]
             xdot = Xsol[i, N:]
-            Fnl = 0.25 * cls.Knl * x[0]**4
+            Fnl = 0.25 * cls.Knl * x[0] ** 4
             E[i] = 0.5 * (xdot.T @ cls.M @ xdot + x.T @ cls.K @ x) + Fnl
         energy = np.mean(E)
 

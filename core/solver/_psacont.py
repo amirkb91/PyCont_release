@@ -30,8 +30,10 @@ def psacont(self):
         tau_pred = tau + tgt[-1] * step * stepsign
         X_pred = X + tgt[:-1] * step * stepsign
 
-        if (omega / tau_pred > self.prob.cont_params["continuation"]["fmax"] or
-                omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]):
+        if (
+            omega / tau_pred > self.prob.cont_params["continuation"]["fmax"]
+            or omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]
+        ):
             print(f"Frequency {omega / tau_pred:.2e} Hz outside of specified boundary.")
             break
 
@@ -52,12 +54,13 @@ def psacont(self):
                 break
 
             residual = spl.norm(H)
-            if (residual < self.prob.cont_params["continuation"]["tol"] and
-                    itercorrect >= self.prob.cont_params["continuation"]["itermin"]):
+            if (
+                residual < self.prob.cont_params["continuation"]["tol"]
+                and itercorrect >= self.prob.cont_params["continuation"]["itermin"]
+            ):
                 cvg_cont = True
                 break
-            elif (itercorrect > self.prob.cont_params["continuation"]["itermax"] or
-                  residual > 1e10):
+            elif itercorrect > self.prob.cont_params["continuation"]["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
             self.log.screenout(
@@ -79,9 +82,9 @@ def psacont(self):
             hx = np.matmul(self.h, X_pred)
             Z = np.vstack([H, hx.reshape(-1, 1), np.zeros(1)])
             if not forced:
-                dxt = spl.lstsq(
-                    J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd"
-                )[0]
+                dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[
+                    0
+                ]
             elif forced:
                 dxt = spl.solve(J_corr, -Z, check_finite=False)
             tau_pred += dxt[-1, 0]
@@ -115,12 +118,14 @@ def psacont(self):
             mask[twoN:-1] = False
             beta = np.degrees(
                 np.arccos(
-                    (tgt_next[mask].T @ tgt[mask]) /
-                    (spl.norm(tgt[mask]) * spl.norm(tgt_next[mask]))
+                    (tgt_next[mask].T @ tgt[mask])
+                    / (spl.norm(tgt[mask]) * spl.norm(tgt_next[mask]))
                 )
             )
-            if (self.prob.cont_params["continuation"]["betacontrol"] and
-                    beta > self.prob.cont_params["continuation"]["betamax"]):
+            if (
+                self.prob.cont_params["continuation"]["betacontrol"]
+                and beta > self.prob.cont_params["continuation"]["betamax"]
+            ):
                 print("Beta exceeds maximum angle.")
                 cvg_cont = False
             else:
