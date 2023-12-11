@@ -11,7 +11,7 @@
     "itermax": 4,
     "iterjac": 1,
     "s0": 0.005,
-    "nadapt": 2,
+    "nadapt": 1,
     "smin": 1e-3,
     "smax": 5.0,
     "betacontrol": false,
@@ -19,7 +19,7 @@
     "fmin": 0.15,
     "fmax": 0.23,
     "Emax": 1000000,
-    "phase_index_unforced": "2,3"
+    "phase_index_unforced": "allvel"
   },
   "shooting": {
     "method": "single",
