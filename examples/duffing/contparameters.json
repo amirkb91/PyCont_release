@@ -1,6 +1,6 @@
 {
   "continuation": {
-    "forced": false,
+    "forced": true,
     "method": "psa",
     "tangent": "keller",
     "dir": 1,
@@ -12,12 +12,12 @@
     "iterjac": 1,
     "s0": 0.005,
     "nadapt": 1,
-    "smin": 1e-4,
+    "smin": 1e-5,
     "smax": 0.1,
     "betacontrol": false,
     "betamax": 20,
-    "fmin": 0.1,
-    "fmax": 1.0,
+    "fmin": 0.05,
+    "fmax": 0.5,
     "Emax": 1000,
     "phase_index_unforced": "allvel"
   },
@@ -35,12 +35,12 @@
     }
   },
   "forcing": {
-    "amplitude": 1,
+    "amplitude": 0.1,
     "phase_ratio": 0.5,
-    "tau0": 0,
+    "tau0": 0.05,
     "tau1": 0,
     "rho_GA": 1.0,
-    "starting_freq_scale": 0.7
+    "starting_freq_scale": 0.6
   },  
   "first_point": {
     "itermax": 30,
@@ -58,6 +58,6 @@
   },
   "Logger": {
     "plot": true,
-    "file_name": "NNM1"
+    "file_name": "FRF1"
   }
 }

@@ -3,11 +3,10 @@ from scipy.integrate import odeint
 
 
 class Duffing:
-    # parameters of the model EoM
-    # xddot + delta*xdot + alpha*x + beta*x^3 = 0
-    delta = 0.0
-    alpha = 1.0
-    beta = 1.0
+    # fixed parameters of the unforced model EoM
+    # xddot + delta*xdot + alpha*x + beta*x^3 = F*cos(2pi/T*t + phi)
+    alpha, beta = 1.0, 1.0
+    delta, F, phi = 0.0, 0.0, 0.0
 
     # finite element data, 1 dof model
     free_dof = np.array([0])
@@ -16,28 +15,42 @@ class Duffing:
     ndof_free = 1
 
     @classmethod
-    def system_ode(cls, t, X):
+    def forcing_parameters(cls, cont_params):
+        # update parameters if continuation is forced
+        if cont_params["continuation"]["forced"]:
+            cls.F = cont_params["forcing"]["amplitude"]
+            cls.delta = cont_params["forcing"]["tau0"]
+            cls.phi = cont_params["forcing"]["phase_ratio"] * np.pi
+
+    @classmethod
+    def model_ode(cls, t, X, T):
         # ODE of model: Xdot(t) = g(X(t))
         x = X[0]
         xdot = X[1]
         f = cls.delta * xdot + cls.alpha * x + cls.beta * x**3
-        Xdot = np.array([xdot, -f])
+        force = cls.F * np.cos(2 * np.pi / T * t + cls.phi)
+        Xdot = np.array([xdot, -f + force])
         return Xdot
 
     @classmethod
-    def augsystem_ode(cls, t, X_aug):
-        # Augemented ODE of model + Monodromy, to be solved together
+    def model_sens_ode(cls, t, ic, T):
+        # Augemented ODE of model + sensitivities, to be solved together
         # System: Xdot(t) = g(X(t))
         # Monodromy: dXdX0dot = dg(X)dX . dXdX0
-        X, dXdX0 = X_aug[:2], X_aug[2:]
-        x = X[0]
-        xdot = X[1]
+        # Time sens: dXdTdot = dg(X)dX . dXdT + dgdT
+        X0, dXdX0, dXdT = ic[:2], ic[2:6], ic[6:]
+        x = X0[0]
+        xdot = X0[1]
         f = cls.delta * xdot + cls.alpha * x + cls.beta * x**3
-        Xdot = np.array([xdot, -f])
+        force = cls.F * np.cos(2 * np.pi / T * t + cls.phi)
+        force_der = -cls.F * np.sin(2 * np.pi / T * t + cls.phi) * 2 * np.pi * t / T**2
+        Xdot = np.array([xdot, -f + force])
         dgdX = np.array([[0, 1], [-cls.alpha - 3 * cls.beta * x**2, -cls.delta]])
+        dgdT = np.array([0, force_der])
         dXdX0dot = dgdX @ dXdX0.reshape(2, 2)
+        dXdTdot = dgdX @ dXdT.reshape(2, 1) + dgdT.reshape(-1, 1)
 
-        return np.concatenate([Xdot, dXdX0dot.flatten()])
+        return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten()])
 
     @classmethod
     def eigen_solve(cls):
@@ -51,48 +64,51 @@ class Duffing:
         return eig, frq, pose0
 
     @classmethod
-    def time_solve(
-        cls, omega, tau, X, pose_base, cont_params, return_time=False, sensitivity=True
-    ):
+    def time_solve(cls, omega, T, X, pose_base, cont_params, sensitivity=True):
         nperiod = cont_params["shooting"]["single"]["nperiod"]
         nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
         rel_tol = cont_params["shooting"]["rel_tol"]
-        T = tau / omega
 
-        # Add position to increment and do time sim to get solution and Monodromy M
-        X_total = X.copy()
-        X_total[0] += pose_base
+        # Add position to increment and do time sim to get solution and sensitivities
+        X0 = X.copy()
+        X0[0] += pose_base
         t = np.linspace(0, T * nperiod, nsteps * nperiod + 1)
-        initial_cond_aug = np.concatenate((X_total, np.eye(2).flatten()))
-        Xsol_aug = np.array(
-            odeint(cls.augsystem_ode, initial_cond_aug, t, rtol=rel_tol, tfirst=True)
-        )
-        Xsol, M = Xsol_aug[:, :2], Xsol_aug[-1, 2:].reshape(2, 2)
+        all_ic = np.concatenate((X0, np.eye(2).flatten(), np.zeros(2)))
+        sol = odeint(cls.model_sens_ode, all_ic, t, args=(T * nperiod,), rtol=rel_tol, tfirst=True)
+        Xsol, M, dXdT = sol[:, :2], sol[-1, 2:6].reshape(2, 2), sol[-1, 6:]
 
         # periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
         H = H.reshape(-1, 1)
 
-        # Augmented Jacobian (dHdX0 and dHdt)
+        # Jacobian (dHdX0 and dHdt)
         dHdX0 = M - np.eye(2)
-        dHdt = cls.system_ode(None, Xsol[-1, :]) * nperiod
-        J = np.concatenate((dHdX0, dHdt.reshape(-1, 1)), axis=1)
+        gX_T = cls.model_ode(T * nperiod, Xsol[-1, :], T * nperiod) * nperiod
 
-        # solution pose and vel taken from time 0
-        pose = Xsol[0, 0]
-        vel = Xsol[0, 1]
+        # *** Time sensitivity is not working, do finite difference for now ***
+        if cont_params["continuation"]["forced"]:
+            # dHdt = gX_T + dXdT
+            dHdT = cls.timesens_centdiff(X0, T)
+        else:
+            dHdT = gX_T
 
-        # Energy, conservative model so take mean of all time
+        J = np.concatenate((dHdX0, dHdT.reshape(-1, 1)), axis=1)
+
+        # solution pose and vel over time
+        pose_time = Xsol[:, 0].reshape(1, -1)
+        vel_time = Xsol[:, 1].reshape(1, -1)
+
+        # Energy
         E = np.zeros(nsteps * nperiod + 1)
         for i in range(nsteps * nperiod + 1):
             x = Xsol[i, 0]
             xdot = Xsol[i, 1]
             Fnl = 0.25 * cls.beta * x**4
             E[i] = 0.5 * (xdot**2 + cls.alpha * x**2) + Fnl
-        energy = np.mean(E)
+        energy = np.max(E)
 
         cvg = True
-        return H, J, M, pose, vel, energy, cvg
+        return H, J, pose_time, vel_time, energy, cvg
 
     @classmethod
     def get_fe_data(cls):
@@ -102,3 +118,34 @@ class Duffing:
             "ndof_fix": cls.ndof_fix,
             "ndof_free": cls.ndof_free,
         }
+
+    @classmethod
+    def monodromy_centdiff(cls, t, X0, T):
+        # central difference calculation of the monodromy matrix
+        # can be used to check values from ode
+        eps = 1e-8
+        M = np.zeros([2, 2])
+        for i in range(2):
+            X0plus = X0.copy()
+            X0plus[i] += eps
+            XTplus = np.array(odeint(cls.model_ode, X0plus, t, args=(T,), tfirst=True))[-1, :]
+            X0mins = X0.copy()
+            X0mins[i] -= eps
+            XTmins = np.array(odeint(cls.model_ode, X0mins, t, args=(T,), tfirst=True))[-1, :]
+            m = (XTplus - XTmins) / (2 * eps)
+            M[:, i] = m
+        return M
+
+    @classmethod
+    def timesens_centdiff(cls, X0, T):
+        # central difference calculation of the time sensitivity matrix
+        # can be used to check values from ode
+        eps = 1e-8
+        Tplus = T + eps
+        t = np.linspace(0, Tplus, 301)
+        XTplus = np.array(odeint(cls.model_ode, X0, t, args=(Tplus,), tfirst=True))[-1, :]
+        Tmins = T - eps
+        t = np.linspace(0, Tmins, 301)
+        XTmins = np.array(odeint(cls.model_ode, X0, t, args=(Tmins,), tfirst=True))[-1, :]
+        dXdT = (XTplus - XTmins) / (2 * eps)
+        return dXdT

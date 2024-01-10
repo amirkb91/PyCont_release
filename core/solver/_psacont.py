@@ -1,7 +1,10 @@
 import numpy as np
-from copy import deepcopy as dp
 import scipy.linalg as spl
+from collections import namedtuple
 from ._cont_step import cont_step
+
+# import warnings
+# warnings.filterwarnings("ignore", category=spl.LinAlgWarning)
 
 
 def psacont(self):
@@ -10,11 +13,12 @@ def psacont(self):
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     twoN = 2 * N
+    cvg_sol = namedtuple("converged_solution", "X, T, H, J")
 
     # first point solution
-    X = dp(self.X0)
-    pose_base = dp(self.pose)
-    tgt = dp(self.tgt0)
+    X = self.X0.copy()
+    pose_base = self.pose.copy()
+    tgt = self.tgt0.copy()
     omega = self.omega
     tau = self.tau
 
@@ -45,7 +49,7 @@ def psacont(self):
             else:
                 sensitivity = False
 
-            [H, Jsim, Msim, pose, vel, energy, cvg_zerof] = self.prob.zerofunction(
+            [H, Jsim, pose_time, vel_time, energy, cvg_zerof] = self.prob.zerofunction(
                 omega, tau_pred, X_pred, pose_base, self.prob.cont_params, sensitivity=sensitivity
             )
             if not cvg_zerof:
@@ -54,6 +58,20 @@ def psacont(self):
                 break
 
             residual = spl.norm(H)
+
+            if sensitivity:
+                J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
+                soldata = cvg_sol(X_pred.copy(), tau_pred / omega, H.copy(), Jsim.copy())
+            else:
+                # Broyden's Jacobian update
+                deltaX = (
+                    np.append(X_pred, tau_pred / omega) - np.append(soldata.X, soldata.T)
+                ).reshape(-1, 1)
+                deltaf = H - soldata.H
+                Jsim = soldata.J + 1 / spl.norm(deltaX) * (deltaf - soldata.J @ deltaX) @ deltaX.T
+                J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
+                soldata = cvg_sol(X_pred.copy(), tau_pred / omega, H.copy(), Jsim.copy())
+
             if (
                 residual < self.prob.cont_params["continuation"]["tol"]
                 and itercorrect >= self.prob.cont_params["continuation"]["itermin"]
@@ -63,6 +81,7 @@ def psacont(self):
             elif itercorrect > self.prob.cont_params["continuation"]["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
+
             self.log.screenout(
                 iter=itercont,
                 correct=itercorrect,
@@ -72,21 +91,17 @@ def psacont(self):
                 step=stepsign * step,
             )
 
-            # apply corrections orthogonal to tangent (orth only on first partition and period)
-            if sensitivity:
-                M = Msim
-                J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
-                J_corr = dp(J)
-                J_corr[-1, twoN:-1] = 0.0  # has no effect on single shooting
+            # apply corrections orthogonal to tangent
             itercorrect += 1
-            hx = np.matmul(self.h, X_pred)
+            Jcr = J.copy()
+            # orthogonality only on first partition and period: has no effect on single shooting
+            Jcr[-1, twoN:-1] = 0.0
+            hx = self.h @ X_pred
             Z = np.vstack([H, hx.reshape(-1, 1), np.zeros(1)])
             if not forced:
-                dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[
-                    0
-                ]
+                dxt = spl.lstsq(Jcr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             elif forced:
-                dxt = spl.solve(J_corr, -Z, check_finite=False)
+                dxt = spl.solve(Jcr, -Z, check_finite=False)
             tau_pred += dxt[-1, 0]
             dx = dxt[:-1, 0]
             X_pred += dx
@@ -94,7 +109,7 @@ def psacont(self):
         if cvg_cont:
             # find new tangent with converged solution
             if frml == "secant":
-                # X_pred[:N] is already the diff between POSE for previous two sols
+                # X_pred[:N]==INC and technically is already the diff between POSE for previous two sols
                 tgt_next = np.concatenate((X_pred[:N], X_pred[N:] - X[N:], [tau_pred - tau]))
                 # tgt_next = np.concatenate((X_pred - X, [tau_pred - tau]))
             else:
@@ -130,16 +145,6 @@ def psacont(self):
                 cvg_cont = False
             else:
                 # passed check, store and update for next step
-                self.log.store(
-                    sol_pose=pose,
-                    sol_vel=vel,
-                    sol_T=tau_pred / omega,
-                    sol_tgt=tgt_next,
-                    sol_energy=energy,
-                    sol_beta=beta,
-                    sol_itercorrect=itercorrect,
-                    sol_step=stepsign * step,
-                )
                 self.log.screenout(
                     iter=itercont,
                     correct=itercorrect,
@@ -149,17 +154,33 @@ def psacont(self):
                     step=stepsign * step,
                     beta=beta,
                 )
+                self.log.store(
+                    sol_pose=pose_time[:, 0],
+                    sol_vel=vel_time[:, 0],
+                    sol_T=tau_pred / omega,
+                    sol_tgt=tgt_next,
+                    sol_energy=energy,
+                    sol_beta=beta,
+                    sol_itercorrect=itercorrect,
+                    sol_step=stepsign * step,
+                )
 
                 itercont += 1
                 if frml in ("peeters", "secant"):  # and beta >= 90:
                     # stepsign = np.sign(stepsign * tgt_next[mask].T @ tgt[mask])
                     stepsign = np.sign(stepsign * np.cos(np.radians(beta)))
                 tau = tau_pred
-                X = dp(X_pred)
-                tgt = dp(tgt_next)
+                X = X_pred.copy()
+                tgt = tgt_next.copy()
                 # update pose_base and set inc to zero (slice 0:N on each partition)
-                pose_base = dp(pose)
+                # pose_time[:, 0] will have included inc from current sol
+                pose_base = pose_time[:, 0].copy()
                 X[np.mod(np.arange(X.size), twoN) < N] = 0.0
+
+                # if self.prob.cont_params["shooting"]["scaling"]:
+                #     # reset tau to 1.0
+                #     omega = omega / tau
+                #     tau = 1.0
 
         # adaptive step size for next point
         if itercont > self.prob.cont_params["continuation"]["nadapt"] or not cvg_cont:

@@ -1,5 +1,4 @@
 import numpy as np
-from copy import deepcopy as dp
 import scipy.linalg as spl
 from ._cont_step import cont_step
 
@@ -11,8 +10,8 @@ def seqcont(self):
     twoN = 2 * N
 
     # first point solution
-    X = dp(self.X0)
-    pose_base = dp(self.pose)
+    X = self.X0.copy()
+    pose_base = self.pose.copy()
     omega = self.omega
     tau = self.tau
 
@@ -26,13 +25,13 @@ def seqcont(self):
     while True:
         # increment period
         tau_pred = tau + step * stepsign
-        X_pred = dp(X)
+        X_pred = X.copy()
 
         if (
             omega / tau_pred > self.prob.cont_params["continuation"]["fmax"]
             or omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]
         ):
-            print("Frequency outside of specified boundary.")
+            print(f"Frequency {omega / tau_pred:.2e} Hz outside of specified boundary.")
             break
 
         # correction step
@@ -43,7 +42,7 @@ def seqcont(self):
             else:
                 sensitivity = False
 
-            [H, Jsim, Msim, pose, vel, energy, cvg_zerof] = self.prob.zerofunction(
+            [H, Jsim, pose_time, vel_time, energy, cvg_zerof] = self.prob.zerofunction(
                 omega, tau_pred, X_pred, pose_base, self.prob.cont_params, sensitivity=sensitivity
             )
             if not cvg_zerof:
@@ -52,6 +51,10 @@ def seqcont(self):
                 break
 
             residual = spl.norm(H)
+
+            if sensitivity:
+                J = np.block([[Jsim[:, :-1]], [self.h]])
+
             if (
                 residual < self.prob.cont_params["continuation"]["tol"]
                 and itercorrect >= self.prob.cont_params["continuation"]["itermin"]
@@ -61,6 +64,7 @@ def seqcont(self):
             elif itercorrect > self.prob.cont_params["continuation"]["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
+
             self.log.screenout(
                 iter=itercont,
                 correct=itercorrect,
@@ -71,24 +75,16 @@ def seqcont(self):
             )
 
             # correction
-            if sensitivity:
-                M = Msim
-                J = np.block([[Jsim[:, :-1]], [self.h]])
             itercorrect += 1
-            hx = np.matmul(self.h, X_pred)
+            hx = self.h @ X_pred
             Z = np.vstack([H, hx.reshape(-1, 1)])
-            dx = spl.lstsq(J, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
+            if not forced:
+                dx = spl.lstsq(J, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
+            elif forced:
+                dx = spl.solve(J, -Z, check_finite=False)
             X_pred[:] += dx[:, 0]
 
         if cvg_cont:
-            self.log.store(
-                sol_pose=pose,
-                sol_vel=vel,
-                sol_T=tau_pred / omega,
-                sol_energy=energy,
-                sol_itercorrect=itercorrect,
-                sol_step=step,
-            )
             self.log.screenout(
                 iter=itercont,
                 correct=itercorrect,
@@ -98,13 +94,27 @@ def seqcont(self):
                 step=step,
                 beta=0.0,
             )
+            self.log.store(
+                sol_pose=pose_time[:, 0],
+                sol_vel=vel_time[:, 0],
+                sol_T=tau_pred / omega,
+                sol_energy=energy,
+                sol_itercorrect=itercorrect,
+                sol_step=step,
+            )
 
             itercont += 1
             tau = tau_pred
-            X = dp(X_pred)
+            X = X_pred.copy()
             # update pose_base and set inc to zero (slice 0:N on each partition)
-            pose_base = dp(pose)
+            # pose_time[:, 0] will have included inc from current sol
+            pose_base = pose_time[:, 0].copy()
             X[np.mod(np.arange(X.size), twoN) < N] = 0.0
+
+            # if self.prob.cont_params["shooting"]["scaling"]:
+            #     # reset tau to 1.0
+            #     omega = omega / tau
+            #     tau = 1.0
 
         # adaptive step size for next point
         if itercont > self.prob.cont_params["continuation"]["nadapt"] or not cvg_cont:
