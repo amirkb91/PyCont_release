@@ -23,7 +23,7 @@ def FAmp_duff(files):
 
     plt.style.use("ggplot")
     f, a = plt.subplots(figsize=(10, 7))
-    a.set(xlabel="F/\u03C9\u2099", ylabel="Normalised Position")
+    a.set(xlabel="f/f\u2099", ylabel="Normalised Position")
 
     # plot sols
     line = []
