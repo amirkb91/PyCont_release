@@ -1,4 +1,5 @@
 .idea/
+.duffing
 __pycache__/
 .vscode/
 Results/
@@ -11,3 +12,5 @@ Results/
 *.fig
 *.csv
 *.mat
+build/
+dist/
