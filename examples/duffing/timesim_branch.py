@@ -9,7 +9,9 @@ from postprocess.bifurcation import bifurcation_functions
 
 """ Run time simulations for all points on solution branch and store """
 
-run_bif = input("Compute bifurcation functions? ")
+run_bif = input("Compute bifurcation functions (y/n)? ")
+if run_bif not in ("y", "n"):
+    raise Exception("Input not valid")
 
 # read solution file
 file = sys.argv[1]
@@ -41,11 +43,12 @@ n_solpoints = len(T)
 nsteps = par["shooting"]["single"]["nsteps_per_period"]
 pose_time = np.zeros([np.shape(pose)[0], nsteps + 1, n_solpoints])
 vel_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
+acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
 time = np.zeros([n_solpoints, nsteps + 1])
 
 # run sims
 Duffing.forcing_parameters(par)
-if run_bif:
+if run_bif == "y":
     Floquet = np.zeros([2, n_solpoints], dtype=np.complex128)
     Stability = np.zeros(n_solpoints)
     Fold = np.zeros(n_solpoints)
@@ -58,7 +61,7 @@ with alive_bar(n_solpoints) as bar:
         [_, J, pose_time[:, :, i], vel_time[:, :, i], _, _] = Duffing.time_solve(
             1.0, T[i], X, pose[0, i], par
         )
-        if run_bif:
+        if run_bif == "y":
             M = J[:, :-1] + np.eye(2)
             bifurcation_out = bifurcation_functions(M)
             Floquet[:, i] = bifurcation_out[0]
@@ -67,6 +70,13 @@ with alive_bar(n_solpoints) as bar:
             Flip[i] = bifurcation_out[3]
             Neimark_Sacker[i] = bifurcation_out[4]
         time[i, :] = np.linspace(0, T[i], nsteps + 1)
+        # Acceleration
+        acc_time[:, :, i] = (
+            Duffing.F * np.cos(2 * np.pi / T[i] * time[i, :] + Duffing.phi)
+            - Duffing.delta * vel_time[:, :, i]
+            - Duffing.alpha * pose_time[:, :, i]
+            - Duffing.beta * pose_time[:, :, i] ** 3
+        )
         bar()
 
 # write to file
@@ -75,12 +85,15 @@ if "/Config_Time/POSE" in time_data.keys():
     del time_data["/Config_Time/POSE"]
 if "/Config_Time/VELOCITY" in time_data.keys():
     del time_data["/Config_Time/VELOCITY"]
+if "/Config_Time/ACCELERATION" in time_data.keys():
+    del time_data["/Config_Time/ACCELERATION"]
 if "/Config_Time/Time" in time_data.keys():
     del time_data["/Config_Time/Time"]
 time_data["/Config_Time/POSE"] = pose_time
 time_data["/Config_Time/VELOCITY"] = vel_time
+time_data["/Config_Time/ACCELERATION"] = acc_time
 time_data["/Config_Time/Time"] = time
-if run_bif:
+if run_bif == "y":
     if "/Bifurcation/Floquet" in time_data.keys():
         del time_data["/Bifurcation/Floquet"]
     if "/Bifurcation/Stability" in time_data.keys():

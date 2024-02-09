@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint
+from scipy.integrate import odeint, simps
 
 
 class Duffing:
@@ -99,13 +99,32 @@ class Duffing:
         vel_time = Xsol[:, 1].reshape(1, -1)
 
         # Energy
-        E = np.zeros(nsteps * nperiod + 1)
-        for i in range(nsteps * nperiod + 1):
-            x = Xsol[i, 0]
-            xdot = Xsol[i, 1]
-            Fnl = 0.25 * cls.beta * x**4
-            E[i] = 0.5 * (xdot**2 + cls.alpha * x**2) + Fnl
+        E0 = (
+            0.5 * (Xsol[:, 1] ** 2 + cls.alpha * Xsol[:, 0] ** 2)
+            + 0.25 * cls.beta * Xsol[:, 0] ** 4
+        )
+        force_vel = cls.F * np.cos(2 * np.pi / T * t + cls.phi) * Xsol[:, 1]
+        damping_vel = cls.delta * Xsol[:, 1] ** 2
+        E1 = np.array(
+            [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
+        )
+        E = E0 + E1
         energy = np.max(E)
+
+        # Acceleration
+        Xddot = (
+            cls.F * np.cos(2 * np.pi / T * t + cls.phi)
+            - cls.delta * Xsol[:, 1]
+            - cls.alpha * Xsol[:, 0]
+            - cls.beta * Xsol[:, 0] ** 3
+        )
+
+        # Lagrangian
+        L = (
+            0.5 * Xsol[:, 1] ** 2
+            - 0.5 * cls.alpha * Xsol[:, 0] ** 2
+            - 0.25 * cls.beta * Xsol[:, 0] ** 4
+        )
 
         cvg = True
         return H, J, pose_time, vel_time, energy, cvg
