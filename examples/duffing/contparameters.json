@@ -5,14 +5,14 @@
     "tangent": "keller",
     "dir": 1,
     "npts": 500,
-    "tol": 1e-6,
+    "tol": 1e-06,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
     "iterjac": 1,
     "s0": 0.005,
     "nadapt": 1,
-    "smin": 1e-5,
+    "smin": 1e-08,
     "smax": 0.1,
     "betacontrol": false,
     "betamax": 20,
@@ -35,13 +35,13 @@
     }
   },
   "forcing": {
-    "amplitude": 0.1,
+    "amplitude": 0.2,
     "phase_ratio": 0.5,
     "tau0": 0.05,
     "tau1": 0,
     "rho_GA": 1.0,
     "starting_freq_scale": 0.6
-  },  
+  },
   "first_point": {
     "itermax": 30,
     "eig_start": {
@@ -57,7 +57,7 @@
     }
   },
   "Logger": {
-    "plot": true,
-    "file_name": "FRF1"
+    "plot": false,
+    "file_name": "FRF2"
   }
 }

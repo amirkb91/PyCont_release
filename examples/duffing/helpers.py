@@ -1,6 +1,6 @@
 import json
 import h5py
-import sys, shutil
+import shutil
 import numpy as np
 from alive_progress import alive_bar
 
@@ -51,7 +51,7 @@ def update_data(file='FRF1', inplace=True):
             time[i, :] = np.linspace(0, T[i], nsteps + 1)
             # Acceleration
             acc_time[:, :, i] = (
-                Duffing.F * np.cos(2 * np.pi / T[i] * time[i, :] + Duffing.phi)
+                Duffing.F * np.cos((2 * np.pi / T[i]) * time[i, :] + Duffing.phi)
                 - Duffing.delta * vel_time[:, :, i]
                 - Duffing.alpha * pose_time[:, :, i]
                 - Duffing.beta * pose_time[:, :, i] ** 3
