@@ -37,6 +37,7 @@ def update_data(file='FRF1', inplace=True):
     pose_time = np.zeros([np.shape(pose)[0], nsteps + 1, n_solpoints])
     vel_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
     acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
+    force_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
     time = np.zeros([n_solpoints, nsteps + 1])
 
     # Run sims
@@ -56,6 +57,10 @@ def update_data(file='FRF1', inplace=True):
                 - Duffing.alpha * pose_time[:, :, i]
                 - Duffing.beta * pose_time[:, :, i] ** 3
             )
+            # Force
+            force_time[:, :, i] = (
+                Duffing.F * np.cos((2 * np.pi / T[i]) * time[i, :] + Duffing.phi)
+            )
             bar()
 
     # Write to file
@@ -66,11 +71,14 @@ def update_data(file='FRF1', inplace=True):
         del time_data["/Config_Time/VELOCITY"]
     if "/Config_Time/ACCELERATION" in time_data.keys():
         del time_data["/Config_Time/ACCELERATION"]
+    if "/Config_Time/Force" in time_data.keys():
+        del time_data["/Config_Time/Force"]
     if "/Config_Time/Time" in time_data.keys():
         del time_data["/Config_Time/Time"]
     time_data["/Config_Time/POSE"] = pose_time
     time_data["/Config_Time/VELOCITY"] = vel_time
     time_data["/Config_Time/ACCELERATION"] = acc_time
+    time_data["/Config_Time/Force"] = force_time
     time_data["/Config_Time/Time"] = time
     time_data.close()
 
