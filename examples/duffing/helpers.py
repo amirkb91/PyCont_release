@@ -1,6 +1,7 @@
 import json
 import h5py
 import shutil
+import pickle
 import numpy as np
 from alive_progress import alive_bar
 from sklearn.model_selection import train_test_split
@@ -174,7 +175,7 @@ def plot_sols(file='FRF1'):
     return d
 
 
-def data_to_dict(num_files=10, filename='FRF'):
+def save_to_file(num_files=10, filename='FRF'):
     """Store simulation data
 
     Args:
@@ -213,4 +214,89 @@ def data_to_dict(num_files=10, filename='FRF'):
         d[file.strip(".h5")]['force'] = force
         d[file.strip(".h5")]['T'] = T
         
+    # Save dict to file
+    with open('data.pkl', 'wb') as fp:
+        pickle.dump(d, fp)
+    
+    
+def train_test_data(num_files=10, filename='FRF'):
+    """Create & Split simulation data
+
+    Args:
+        num_files (int, optional): Files with Continuation results. Defaults to 10.
+        filename (str, optional): File to save results. Defaults to 'FRF'.
+    """
+    # Access data files as dict
+    data = save_to_file(num_files)
+    
+    # Store ML data
+    x = np.array([])
+    dx = np.array([])
+    ddx = np.array([])
+    t = np.array([])
+    f = np.array([])
+    period = np.array([])  
+    # Empty dict to store current dile data
+    d = {}
+    
+    # Loop over all files in directory
+    for i in range(1, num_files+1):
+        # Open new file
+        file = filename
+        file += f"{i}"
+    
+        if not file.endswith(".h5"):
+            file += ".h5"
+
+        # Access data
+        data = h5py.File(str(file), "r")
+        pose = data["/Config_Time/POSE"][:]
+        vel = data["/Config_Time/VELOCITY"][:]
+        acc = data["/Config_Time/ACCELERATION"][:]
+        time = data["/Config_Time/Time"][:]
+        force = data["/Config_Time/Force"][:]
+        T = data["/T"][:]
+        
+        # Add to dict
+        d[file.strip(".h5")] = {}
+        d[file.strip(".h5")]['pose'] = pose
+        d[file.strip(".h5")]['vel'] = vel
+        d[file.strip(".h5")]['acc'] = acc
+        d[file.strip(".h5")]['time'] = time
+        d[file.strip(".h5")]['force'] = force
+        d[file.strip(".h5")]['T'] = T
+    
+        # Close file
+        data.close()
+        
+    # Save to file
     return d
+        
+        # for i, val in enumerate(data["/Config_Time"]):
+            
+        
+        # d[file]
+        
+        # np.savez('save_to')
+        
+        
+        
+    #     x = np.append(x, pose)
+    #     dx = np.append(dx, vel)
+    #     ddx = np.append(ddx, acc)
+    #     t = np.append(t, time)
+    #     f = np.append(f, force)
+    #     period = np.append(period, T)
+        
+    # # Convert to numpy array
+    # x = x.reshape(301, -1)
+    # dx = dx.reshape(301, -1)
+    # ddx = ddx.reshape(301, -1)
+    # t = t.reshape(301, -1)
+    # f = f.reshape(301, -1)
+    # period = period.reshape(-1)
+    
+    return x, dx, ddx, t, f, period
+        
+    # Save to file
+    # np.savez(file, x, dx, ddx, t, f, period)
