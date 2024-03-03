@@ -151,28 +151,37 @@ def plot_sols(file='FRF1'):
     n_solpoints = len(T)
     
     # Plot figures
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
 
     # Plot Family of Periodic Solutions in Phase Space
-    ax[0].set_title('Family of Periodic Solutions in Phase Space', fontsize=12)
-    ax[0].plot(pose[:, ::30], vel[:, ::30])
-    ax[0].set_xlabel(r'$x$', fontsize=12)
-    ax[0].set_ylabel(r'$\dot{x}$', fontsize=12)
+    ax[0, 0].set_title('Family of Periodic Solutions in Phase Space', fontsize=12)
+    ax[0, 0].plot(pose[:, ::30], vel[:, ::30])
+    ax[0, 0].set_xlabel(r'$x$', fontsize=12)
+    ax[0, 0].set_ylabel(r'$\dot{x}$', fontsize=12)
 
     # Plot NLFR
-    ax[1].set_title(f'Frequency-Response Curve', fontsize=10)
-    ax[1].plot(1/T, np.max(pose, axis=0))
-    ax[1].set_xlabel(r'Period, $T$', fontsize=12)
-    ax[1].set_ylabel(r'Amplitude, $x$', fontsize=12)
+    ax[0, 1].set_title(f'Frequency-Response Curve', fontsize=10)
+    ax[0, 1].plot(1/T, np.max(pose, axis=0))
+    ax[0, 1].set_xlabel(r'Period, $T$', fontsize=12)
+    ax[0, 1].set_ylabel(r'Amplitude, $x$', fontsize=12)
     
-    d = {}
-    d['pose'] = pose
-    d['vel'] = vel
-    d['acc'] = acc
-    d['force'] = force
-    d['time'] = time
-    d['T'] = T
-    return d
+    # Plot position, velocity & time
+    ax[1, 0].set_title('Position', fontsize=10)
+    ax[1, 0].plot(time[:, 0], pose[:, 0])
+    ax[1, 0].set_xlabel(r'$t$')
+    ax[1, 0].set_ylabel(r'${x}$')
+
+    ax[1, 1].set_title('Velocity', fontsize=10)
+    ax[1, 1].plot(time[:, 0], vel[:, 0])
+    ax[1, 1].set_xlabel(r'$t$')
+    ax[1, 1].set_ylabel(r'$\dot{x}$')
+
+    ax[2, 0].set_title('Acceleration', fontsize=10)
+    ax[2, 0].plot(time[:, 0], acc[:, 0])
+    ax[2, 0].set_xlabel(r'$t$')
+    ax[2, 0].set_ylabel(r'$\ddot{x}$')
+
+    fig.tight_layout()
 
 
 def save_to_file(num_files=10, filename='FRF'):
@@ -226,8 +235,9 @@ def train_test_data(num_files=10, filename='FRF'):
         num_files (int, optional): Files with Continuation results. Defaults to 10.
         filename (str, optional): File to save results. Defaults to 'FRF'.
     """
-    # Access data files as dict
-    data = save_to_file(num_files)
+    # Read data
+    with open('data.pkl', 'rb') as fp:
+        data = pickle.load(fp)
     
     # Store ML data
     x = np.array([])
