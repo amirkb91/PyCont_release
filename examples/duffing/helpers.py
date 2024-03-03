@@ -3,6 +3,8 @@ import h5py
 import shutil
 import numpy as np
 from alive_progress import alive_bar
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 
 from duffing import Duffing
 from runscript import run
@@ -79,7 +81,7 @@ def update_data(file='FRF1', inplace=True):
     time_data["/Config_Time/VELOCITY"] = vel_time
     time_data["/Config_Time/ACCELERATION"] = acc_time
     time_data["/Config_Time/Force"] = force_time
-    time_data["/Config_Time/Time"] = time
+    time_data["/Config_Time/Time"] = time.T
     time_data.close()
 
 
@@ -94,11 +96,11 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         phase_ratio (float, optional): Defaults to 0.5.
         damping (float, optional): Defaults to 0.05.
     """
-    # range only works with integers
+    # Range only works with integers
     min_force_amp = int(min_force_amp*10)
     max_force_amp = int(max_force_amp*10)
     step = int(step*10)
-
+    
     for i in range(min_force_amp, max_force_amp+1, step):
         # Open contparameters.json
         with open(file_name, 'r') as file:
@@ -121,4 +123,94 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         
         # Add acceleration
         update_data(f'FRF{i}')
+        
+        
+def plot_sols(file='FRF1'):
+    """Plot periodic solutions & return data (if needed)
+
+    Args:
+        file (str, optional): File to plot. Defaults to 'FRF1'.
+    """
+    # Get data
+    if not file.endswith(".h5"):
+            file += ".h5"
+    data = h5py.File(str(file), "r")
     
+    # Position, Velocity, Acceleration, Force = F*cos(2pi/T*t + phi), Time
+    ## Note: 
+    # >>> COL -> Number of Periodic Solutions
+    # >>> ROW -> Number of Solution Points
+    pose = data["/Config_Time/POSE"][:].squeeze()
+    vel = data["/Config_Time/VELOCITY"][:].squeeze()
+    acc = data["/Config_Time/ACCELERATION"][:].squeeze()
+    force = data["/Config_Time/Force"][:].squeeze()
+    time = data["/Config_Time/Time"][:].squeeze()
+    # Period (Frequency) for Periodic Solution
+    T = data["/T"][:]
+    n_solpoints = len(T)
+    
+    # Plot figures
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+
+    # Plot Family of Periodic Solutions in Phase Space
+    ax[0].set_title('Family of Periodic Solutions in Phase Space', fontsize=12)
+    ax[0].plot(pose[:, ::30], vel[:, ::30])
+    ax[0].set_xlabel(r'$x$', fontsize=12)
+    ax[0].set_ylabel(r'$\dot{x}$', fontsize=12)
+
+    # Plot NLFR
+    ax[1].set_title(f'Frequency-Response Curve', fontsize=10)
+    ax[1].plot(1/T, np.max(pose, axis=0))
+    ax[1].set_xlabel(r'Period, $T$', fontsize=12)
+    ax[1].set_ylabel(r'Amplitude, $x$', fontsize=12)
+    
+    d = {}
+    d['pose'] = pose
+    d['vel'] = vel
+    d['acc'] = acc
+    d['force'] = force
+    d['time'] = time
+    d['T'] = T
+    return d
+
+
+def data_to_dict(num_files=10, filename='FRF'):
+    """Store simulation data
+
+    Args:
+        num_files (int, optional): Files with Continuation results. Defaults to 10.
+        filename (str, optional): File to save results. Defaults to 'FRF'.
+    """
+    # Store ML data
+    d = {}
+    
+    # Loop over all files in directory
+    for i in range(1, num_files+1):
+        # Open new file
+        file = filename
+        file += f"{i}"
+    
+        if not file.endswith(".h5"):
+            file += ".h5"
+
+        # Access data
+        data = h5py.File(str(file), "r")
+        pose = data["/Config_Time/POSE"][:]
+        vel = data["/Config_Time/VELOCITY"][:]
+        acc = data["/Config_Time/ACCELERATION"][:]
+        time = data["/Config_Time/Time"][:]
+        force = data["/Config_Time/Force"][:]
+        T = data["/T"][:]
+        # Close file
+        data.close()
+        
+        # Add to dict
+        d[file.strip(".h5")] = {}
+        d[file.strip(".h5")]['pose'] = pose
+        d[file.strip(".h5")]['vel'] = vel
+        d[file.strip(".h5")]['acc'] = acc
+        d[file.strip(".h5")]['time'] = time
+        d[file.strip(".h5")]['force'] = force
+        d[file.strip(".h5")]['T'] = T
+        
+    return d
