@@ -205,12 +205,12 @@ def save_to_file(num_files=10, filename='FRF'):
 
         # Access data
         data = h5py.File(str(file), "r")
-        pose = data["/Config_Time/POSE"][:]
-        vel = data["/Config_Time/VELOCITY"][:]
-        acc = data["/Config_Time/ACCELERATION"][:]
-        time = data["/Config_Time/Time"][:]
-        force = data["/Config_Time/Force"][:]
-        T = data["/T"][:]
+        pose = data["/Config_Time/POSE"][:].squeeze()
+        vel = data["/Config_Time/VELOCITY"][:].squeeze()
+        acc = data["/Config_Time/ACCELERATION"][:].squeeze()
+        time = data["/Config_Time/Time"][:].squeeze()
+        force = data["/Config_Time/Force"][:].squeeze()
+        T = data["/T"][:].squeeze()
         # Close file
         data.close()
         
@@ -228,15 +228,15 @@ def save_to_file(num_files=10, filename='FRF'):
         pickle.dump(d, fp)
     
     
-def train_test_data(num_files=10, filename='FRF'):
+def train_test_data(file='data.pkl', split_size=0.20):
     """Create & Split simulation data
 
     Args:
-        num_files (int, optional): Files with Continuation results. Defaults to 10.
-        filename (str, optional): File to save results. Defaults to 'FRF'.
+        file (str, optional): Results. Defaults to 'data.pkl'.
+        split_size (float, optional): Trainig/Test split. Defaults to 20%.
     """
     # Read data
-    with open('data.pkl', 'rb') as fp:
+    with open(file, 'rb') as fp:
         data = pickle.load(fp)
     
     # Store ML data
@@ -245,68 +245,45 @@ def train_test_data(num_files=10, filename='FRF'):
     ddx = np.array([])
     t = np.array([])
     f = np.array([])
-    period = np.array([])  
-    # Empty dict to store current dile data
-    d = {}
+    period = np.array([])
     
-    # Loop over all files in directory
-    for i in range(1, num_files+1):
-        # Open new file
-        file = filename
-        file += f"{i}"
+    # Loop over data
+    for k, v in data.items():
+        pose = data[k]["pose"]
+        vel = data[k]["vel"]
+        acc = data[k]["acc"]
+        time = data[k]["time"]
+        force = data[k]["force"]
+        T = data[k]["T"]
+         
+        x = np.append(x, pose)
+        dx = np.append(dx, vel)
+        ddx = np.append(ddx, acc)
+        t = np.append(t, time)
+        f = np.append(f, force)
+        period = np.append(period, T)
+        
+    # Reshape array
+    x = x.reshape(301, -1)
+    dx = dx.reshape(301, -1)
+    ddx = ddx.reshape(301, -1)
+    t = t.reshape(301, -1)
+    f = f.reshape(301, -1)
+    period = period.reshape(-1)
     
-        if not file.endswith(".h5"):
-            file += ".h5"
-
-        # Access data
-        data = h5py.File(str(file), "r")
-        pose = data["/Config_Time/POSE"][:]
-        vel = data["/Config_Time/VELOCITY"][:]
-        acc = data["/Config_Time/ACCELERATION"][:]
-        time = data["/Config_Time/Time"][:]
-        force = data["/Config_Time/Force"][:]
-        T = data["/T"][:]
-        
-        # Add to dict
-        d[file.strip(".h5")] = {}
-        d[file.strip(".h5")]['pose'] = pose
-        d[file.strip(".h5")]['vel'] = vel
-        d[file.strip(".h5")]['acc'] = acc
-        d[file.strip(".h5")]['time'] = time
-        d[file.strip(".h5")]['force'] = force
-        d[file.strip(".h5")]['T'] = T
+    # Create train & test split
+    x_train, x_test, dx_train, dx_test, ddx_train, ddx_test, t_train, t_test, f_train, f_test = train_test_split(x, dx, ddx, t, f, test_size=split_size, random_state=42, shuffle=True)
     
-        # Close file
-        data.close()
-        
-    # Save to file
-    return d
-        
-        # for i, val in enumerate(data["/Config_Time"]):
-            
-        
-        # d[file]
-        
-        # np.savez('save_to')
-        
-        
-        
-    #     x = np.append(x, pose)
-    #     dx = np.append(dx, vel)
-    #     ddx = np.append(ddx, acc)
-    #     t = np.append(t, time)
-    #     f = np.append(f, force)
-    #     period = np.append(period, T)
-        
-    # # Convert to numpy array
-    # x = x.reshape(301, -1)
-    # dx = dx.reshape(301, -1)
-    # ddx = ddx.reshape(301, -1)
-    # t = t.reshape(301, -1)
-    # f = f.reshape(301, -1)
-    # period = period.reshape(-1)
+    train_dataset, test_dataset = {}, {}    
+    train_dataset['x'] = x_train
+    train_dataset['dx'] = x_train
+    train_dataset['ddx'] = x_train
+    train_dataset['t'] = x_train
+    train_dataset['f'] = x_train
+    test_dataset['x'] = x_test
+    test_dataset['dx'] = x_test
+    test_dataset['ddx'] = x_test
+    test_dataset['t'] = x_test
+    test_dataset['f'] = x_test
     
-    return x, dx, ddx, t, f, period
-        
-    # Save to file
-    # np.savez(file, x, dx, ddx, t, f, period)
+    return train_dataset, test_dataset
