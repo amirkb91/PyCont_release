@@ -84,6 +84,14 @@ def update_data(file='FRF1', inplace=True):
     time_data["/Config_Time/Force"] = force_time
     time_data["/Config_Time/Time"] = time.T
     time_data.close()
+    
+    # Physical System
+    info = {}
+    info['delta'] = Duffing.delta
+    info['alpha'] = Duffing.alpha
+    info['beta'] = Duffing.beta
+
+    return info
 
 
 def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05):
@@ -122,8 +130,19 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         # Run continuation
         run()
         
-        # Add acceleration
-        update_data(f'FRF{i}')
+        # Add acceleration & forcing
+        info = update_data(f'FRF{i}')
+        
+    # Save results to single file 
+    save_to_file(int(max_force_amp/min_force_amp))
+    
+    # Create training & test data split
+    train_dataset, test_dataset = train_test_data()
+    
+    # Add relevant info
+    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
+    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]      
+    return train_dataset, test_dataset, info
         
         
 def plot_sols(file='FRF1'):
