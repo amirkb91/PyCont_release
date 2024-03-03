@@ -276,14 +276,14 @@ def train_test_data(file='data.pkl', split_size=0.20):
     
     train_dataset, test_dataset = {}, {}    
     train_dataset['x'] = x_train
-    train_dataset['dx'] = x_train
-    train_dataset['ddx'] = x_train
-    train_dataset['t'] = x_train
-    train_dataset['f'] = x_train
+    train_dataset['dx'] = dx_train
+    train_dataset['ddx'] = ddx_train
+    train_dataset['t'] = t_train
+    train_dataset['f'] = f_train
     test_dataset['x'] = x_test
-    test_dataset['dx'] = x_test
-    test_dataset['ddx'] = x_test
-    test_dataset['t'] = x_test
-    test_dataset['f'] = x_test
+    test_dataset['dx'] = dx_test
+    test_dataset['ddx'] = ddx_test
+    test_dataset['t'] = t_test
+    test_dataset['f'] = f_test
     
     return train_dataset, test_dataset
