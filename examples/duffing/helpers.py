@@ -245,9 +245,10 @@ def save_to_file(num_files=10, filename='FRF'):
         path = './data'
         try:
             os.mkdir(path)
-            shutil.move(file, f"data/")
         except FileExistsError:
             pass
+        
+        shutil.move(file, f"{path}/{file}")
         
     # Save dict to file
     with open(f'{path}/data.pkl', 'wb') as fp:
