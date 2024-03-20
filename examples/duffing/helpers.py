@@ -95,6 +95,9 @@ def update_data(file='FRF1', inplace=True):
     info['C'] = Duffing.delta * info['M']
     info['NL'] = Duffing.beta * info['M']
     
+    # Clean directory
+    shutil.move(new_file, f"data/")
+    
     return info
 
 
