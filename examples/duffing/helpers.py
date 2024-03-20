@@ -246,8 +246,8 @@ def save_to_file(num_files=10, filename='FRF'):
         try:
             os.mkdir(path)
         except FileExistsError:
-            pass
-        
+            shutil.rmtree(path)
+            os.mkdir(path)
         shutil.move(file, f"{path}/{file}")
         
     # Save dict to file
