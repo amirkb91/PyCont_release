@@ -1,5 +1,6 @@
 import json
 import h5py
+import os
 import shutil
 import pickle
 import numpy as np
@@ -95,9 +96,6 @@ def update_data(file='FRF1', inplace=True):
     info['C'] = Duffing.delta * info['M']
     info['NL'] = Duffing.beta * info['M']
     
-    # Clean directory
-    shutil.move(new_file, f"data/")
-    
     return info
 
 
@@ -143,21 +141,10 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
     # Save results to single file 
     save_to_file(int(max_force_amp/min_force_amp))
     
-    # Create training & test data split
-    train_dataset, test_dataset = train_test_data()
-    
-    # Add relevant info
-    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
-    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
-    info['qmax'] = train_dataset['x'][:, 0].max()
-    info['qdmax'] = train_dataset['dx'][:, 0].max()
-    info['qddmax'] = train_dataset['ddx'][:, 0].max()
-    info['t'] = train_dataset['t'][:, 0].max()
-    info['fmax'] = train_dataset['f'].max()
-    return train_dataset, test_dataset, info
+    return info
         
         
-def plot_sols(file='FRF1'):
+def plot_sols(file='data/FRF1'):
     """Plot periodic solutions & return data (if needed)
 
     Args:
@@ -254,20 +241,47 @@ def save_to_file(num_files=10, filename='FRF'):
         d[file.strip(".h5")]['force'] = force
         d[file.strip(".h5")]['T'] = T
         
+        # Clean directory
+        path = './data'
+        try:
+            os.mkdir(path)
+            shutil.move(file, f"data/")
+        except FileExistsError:
+            pass
+        
     # Save dict to file
-    with open('data.pkl', 'wb') as fp:
+    with open(f'{path}/data.pkl', 'wb') as fp:
         pickle.dump(d, fp)
     
     
-def train_test_data(file='data.pkl', split_size=0.20):
+def train_test_data(
+    save_file='data/data.pkl', 
+    split_size=0.20, 
+    file_name='contparameters.json', 
+    min_force_amp=0.1, 
+    max_force_amp=1.0, 
+    step=0.1, 
+    phase_ratio=0.5, 
+    damping=0.05
+):
     """Create & Split simulation data
 
     Args:
-        file (str, optional): Results. Defaults to 'data.pkl'.
+        save_file (str, optional): Results. Defaults to 'data.pkl'.
         split_size (float, optional): Trainig/Test split. Defaults to 20%.
     """
+    # Generate training data
+    info = generate_data(
+        file_name=file_name, 
+        min_force_amp=min_force_amp, 
+        max_force_amp=max_force_amp, 
+        step=step, 
+        phase_ratio=phase_ratio, 
+        damping=damping
+    )
+    
     # Read data
-    with open(file, 'rb') as fp:
+    with open(save_file, 'rb') as fp:
         data = pickle.load(fp)
     
     # Store ML data
@@ -317,4 +331,13 @@ def train_test_data(file='data.pkl', split_size=0.20):
     test_dataset['t'] = t_test
     test_dataset['f'] = f_test
     
-    return train_dataset, test_dataset
+    # Add relevant info
+    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
+    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
+    info['qmax'] = train_dataset['x'][:, 0].max()
+    info['qdmax'] = train_dataset['dx'][:, 0].max()
+    info['qddmax'] = train_dataset['ddx'][:, 0].max()
+    info['t'] = train_dataset['t'][:, 0].max()
+    info['fmax'] = train_dataset['f'].max()
+    
+    return train_dataset, test_dataset, info
