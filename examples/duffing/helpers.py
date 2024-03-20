@@ -90,7 +90,11 @@ def update_data(file='FRF1', inplace=True):
     info['delta'] = Duffing.delta
     info['alpha'] = Duffing.alpha
     info['beta'] = Duffing.beta
-
+    info['M'] = 1.0
+    info['K'] = Duffing.alpha * info['M']
+    info['C'] = Duffing.delta * info['M']
+    info['NL'] = Duffing.beta * info['M']
+    
     return info
 
 
@@ -141,7 +145,12 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
     
     # Add relevant info
     info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
-    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]      
+    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
+    info['qmax'] = train_dataset['x'][:, 0].max()
+    info['qdmax'] = train_dataset['dx'][:, 0].max()
+    info['qddmax'] = train_dataset['ddx'][:, 0].max()
+    info['t'] = train_dataset['t'][:, 0].max()
+    info['fmax'] = train_dataset['f'].max()
     return train_dataset, test_dataset, info
         
         
