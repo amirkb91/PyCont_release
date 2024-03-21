@@ -202,7 +202,7 @@ def plot_sols(file='data/FRF1'):
     fig.tight_layout()
 
 
-def save_to_file(num_files=10, filename='FRF'):
+def save_to_file(num_files=10, filename='FRF', path='./data'):
     """Store simulation data
 
     Args:
@@ -242,12 +242,12 @@ def save_to_file(num_files=10, filename='FRF'):
         d[file.strip(".h5")]['T'] = T
         
         # Clean directory
-        path = './data'
-        try:
-            os.mkdir(path)
-        except FileExistsError:
-            shutil.rmtree(path)
-            os.mkdir(path)
+        if i==1:
+            try:
+                os.mkdir(path)
+            except FileExistsError:
+                shutil.rmtree(path)
+                os.mkdir(path)
         shutil.move(file, f"{path}/{file}")
         
     # Save dict to file
@@ -310,11 +310,11 @@ def train_test_data(
         period = np.append(period, T)
         
     # Reshape array
-    x = x.reshape(301, -1)
-    dx = dx.reshape(301, -1)
-    ddx = ddx.reshape(301, -1)
-    t = t.reshape(301, -1)
-    f = f.reshape(301, -1)
+    x = x.reshape(pose.shape[0], -1)
+    dx = dx.reshape(vel.shape[0], -1)
+    ddx = ddx.reshape(acc.shape[0], -1)
+    t = t.reshape(time.shape[0], -1)
+    f = f.reshape(force.shape[0], -1)
     period = period.reshape(-1)
     
     # Create train & test split

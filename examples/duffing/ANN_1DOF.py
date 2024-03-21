@@ -180,8 +180,8 @@ class BaseModel():
                 result = tuple([x[index] for x in X])
                 yield jax.device_put(result)
 
-    def train(self, dataset, test_dataset, results=None, epochs=50, show_every=10):
-        """dataset: training dataset (jnp.array),
+    def train(self, train_dataset, test_dataset, results=None, epochs=50, show_every=10):
+        """train_dataset: training dataset (jnp.array),
            test_dataset: test_dataset (jnp.array),
            results: previous results if continuing training on a previously trained model (dict),
            epochs: number of desired training epochs (int),
@@ -190,7 +190,7 @@ class BaseModel():
         train_batch_size = self.settings['train_batch_size']
 
         if self.settings['test_batch_size'] == -1:
-            test_batch_size = len(test_dataset[0])
+            test_batch_size = len(test_dataset)
         else:
             test_batch_size = self.settings['test_batch_size']
 
@@ -226,7 +226,7 @@ class BaseModel():
             train_batches = partial(
                 self.DataIterator, batch=train_batch_size, shuffle=shuffle, seed=seed)
 
-            for train_batch in train_batches(dataset):
+            for train_batch in train_batches(train_dataset):
                 batches += 1
                 params, opt_state, train_batch_loss = self.train_step(
                     params, opt_state, train_batch)
@@ -242,7 +242,7 @@ class BaseModel():
             test_batches = partial(
                 self.DataIterator, batch=test_batch_size, shuffle=True, seed=50)
 
-            for test_batch in test_batches(dataset):
+            for test_batch in test_batches(test_dataset):
                 test_batches_counter += 1
                 test_batch_loss = self.test_step(params, test_batch)
                 test_epoch_loss += test_batch_loss
@@ -270,16 +270,18 @@ class BaseModel():
         self.best_params = jax.device_get(best_params)
         self.results = results
 
-        results = {'metrics': jax.device_get(metrics),
-                   'best_loss': jax.device_get(best_loss),
-                   'best_params': jax.device_get(best_params),
-                   'params': jax.device_get(params),
-                   'opt_state': jax.device_get(opt_state),
-                   'last_epoch': jax.device_get(step+1),
-                   'settings': self.settings,
-                   'time_taken': time_taken.total_seconds()/60,
-                   'phy_sys': self.phy_sys,
-                   'info': self.info}
+        results = {
+            'metrics': jax.device_get(metrics),
+            'best_loss': jax.device_get(best_loss),
+            'best_params': jax.device_get(best_params),
+            'params': jax.device_get(params),
+            'opt_state': jax.device_get(opt_state),
+            'last_epoch': jax.device_get(step+1),
+            'settings': self.settings,
+            'time_taken': time_taken.total_seconds()/60,
+            'phy_sys': self.phy_sys,
+            'info': self.info
+        }
 
         print(
             f'Final Epoch ---> Train Loss: {"%.8f" % train_epoch_loss} |Best Loss: {"%.8f" % best_loss} | Test Loss: {test_epoch_loss}')
@@ -385,7 +387,6 @@ class Damped_LNN(BaseModel):
 
         @jax.jit
         def loss_fn(params, batch):
-
             lagrangian, zeros = dynamics(params)
             q, f, q_d = batch
 
