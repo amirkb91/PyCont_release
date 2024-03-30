@@ -101,7 +101,7 @@ class BaseModel():
     def gather(self):
         """Initialize network parameters, the haiku function containing the network, the loss function && the update function"""
         # Initialize network parameters with the shape of init_data
-        init_data = jnp.zeros((self.input_shape), dtype=jnp.float32)
+        init_data = jnp.zeros((self.input_shape), dtype=jnp.float64)
         params, net = self._compile(
             self.settings, self.hk_module, self.key, init_data)
 
@@ -348,8 +348,8 @@ class Damped_LNN(BaseModel):
     def _dynamics(self):
         net = self.net
 
-        qmax = jnp.array([self.info['qmax']], dtype=jnp.float32)
-        q_dmax = jnp.array([self.info['qdmax']], dtype=jnp.float32)
+        qmax = jnp.array([self.info['qmax']], dtype=jnp.float64)
+        q_dmax = jnp.array([self.info['qdmax']], dtype=jnp.float64)
 
         def dynamics(params):
 

@@ -9,7 +9,8 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 from duffing import Duffing
-from runscript import run
+from duffing_lnn import Duffing_LNN
+from runscript import run, run_LNN
 
 def update_data(file='FRF1', inplace=True):
     """Run time simulations to store acceleration data
@@ -99,7 +100,7 @@ def update_data(file='FRF1', inplace=True):
     return info
 
 
-def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05):
+def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None):
     """Data generator
 
     Args:
@@ -133,7 +134,10 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
             json.dump(data, file, indent = 2)
             
         # Run continuation
-        run()
+        if predict_acc is not None:
+            run_LNN(predict_acc)
+        else:
+            run()
         
         # Add acceleration & forcing
         info = update_data(f'FRF{i}')
