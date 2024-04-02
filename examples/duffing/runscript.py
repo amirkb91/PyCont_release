@@ -34,7 +34,7 @@ def run():
     
 def run_LNN(predict_acc):
     # Instantiate object with trained LNN
-    LNN = Duffing_LNN(predict_acc=predict_acc)
+    Duffing_LNN.LNN_acceleration(pred_acc=predict_acc)
     
     # Problem
     prob = Prob()
@@ -42,7 +42,7 @@ def run_LNN(predict_acc):
     prob.add_doffunction(Duffing_LNN.get_fe_data)
     prob.add_icfunction(Duffing_LNN.eigen_solve)
     if prob.cont_params["shooting"]["method"] == "single":
-        prob.add_zerofunction(LNN.time_solve)
+        prob.add_zerofunction(Duffing_LNN.time_solve)
 
     # Initialise forcing parameters if continuation is forced
     Duffing_LNN.forcing_parameters(prob.cont_params)

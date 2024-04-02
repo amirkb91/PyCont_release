@@ -2,13 +2,14 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from scipy.integrate import odeint, simps
+import scipy.linalg as spl
 
 
 class Duffing_LNN:
     # Physical System to Predict:
     ## xddot + delta*xdot + alpha*x + beta*x^3 = F*cos(2pi/T*t + phi)
     # NOTE: LNN EoM is given as
-    ## d/dt(dL/dxdot) + dD/dxdot + dL/dx = F*cos(2pi/T*t + phi)
+    ## d/dt(dL/dxdot) + dD/dxdot - dL/dx = F*cos(2pi/T*t + phi)
     ## where L = T - V & D
     ## L, D -> Each predicted by separate NNs
     alpha, beta = 1.0, 1.0
@@ -20,8 +21,10 @@ class Duffing_LNN:
     ndof_fix = 0
     ndof_free = 1
     
-    def __init__(self, predict_acc):
-        self.pred_acc = predict_acc
+    @classmethod
+    def LNN_acceleration(cls, pred_acc):
+        # Acceleration predicted by LNN
+        cls.pred_acc = pred_acc
 
     @classmethod
     def forcing_parameters(cls, cont_params):
@@ -30,8 +33,9 @@ class Duffing_LNN:
             cls.F = cont_params["forcing"]["amplitude"]
             cls.delta = cont_params["forcing"]["tau0"]
             cls.phi = cont_params["forcing"]["phase_ratio"] * np.pi
-
-    def model_ode(self, t, X, T):
+    
+    @classmethod
+    def model_ode(cls, t, X, T):
         """ODE in Euler-Lagrange Form
         Args:
             t: Time step
@@ -44,28 +48,21 @@ class Duffing_LNN:
         """
         x = X[0]
         xdot = X[1]
-        # Predict Acceleration
-        force = Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi)
         
+        # Predict Acceleration
+        force = cls.F * np.cos(2 * np.pi / T * t + cls.phi)
         # Repeat along axis for vmap to work
         X_arr = jnp.tile(X, (1, 1))
         force_arr = jnp.tile(force, (1, 1))
-        
-        xddot_arr = jax.jit(self.pred_acc)(X_arr, force_arr)
+        xddot_arr = jax.jit(cls.pred_acc)(X_arr, force_arr)
         xddot = xddot_arr[0, -1]
-        
-        # TODO: Remove Comment
-        diff = xddot - (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))
-        if np.abs(diff) > 0.01:
-            print(f'MODEL ODE')
-            print(f'xdddot from LNN: {xddot}')
-            print(f'xdddot from analytical: {force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3)}')
-            print(f'LNN/analytical: {xddot / (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))}')
    
         Xdot = np.array([xdot, xddot])
+        
         return Xdot
 
-    def model_sens_ode(self, t, ic, T):
+    @classmethod
+    def model_sens_ode(cls, t, ic, T):
         """ODE in Euler-Lagrange Form, 
         This is the augemented ODE of model + sensitivities, to be solved together:
             # System: Xdot(t) = g(X(t))
@@ -82,29 +79,19 @@ class Duffing_LNN:
         x = X0[0]
         xdot = X0[1]
         # Predict Acceleration
-        force = Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi)
+        force = cls.F * np.cos(2 * np.pi / T * t + cls.phi)
         
         # Repeat along axis for vmap to work
         X0_arr = jnp.tile(X0, (1, 1))
         force_arr = jnp.tile(force, (1, 1))
         
-        xddot_arr = jax.jit(self.pred_acc)(X0_arr, force_arr)
+        xddot_arr = jax.jit(cls.pred_acc)(X0_arr, force_arr)
         xddot = xddot_arr[0, -1]
         
-        force_der = -Duffing_LNN.F * np.sin(2 * np.pi / T * t + Duffing_LNN.phi) * 2 * np.pi * t / T**2
+        force_der = -cls.F * np.sin(2 * np.pi / T * t + cls.phi) * 2 * np.pi * t / T**2
         Xdot = np.array([xdot, xddot])
         
-        # TODO: Remove Comment
-        diff = xddot - (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))
-        if np.abs(diff) > 1.0:
-            print(f'MODEL SENS ODE')
-            print(f'xdddot from LNN: {xddot}')
-            print(f'xdddot from analytical: {force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3)}')
-            print(f'LNN/analytical: {xddot / (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))}')
-        
-        dgdX = np.array([jax.jacrev(self.pred_acc, argnums=0)(X0_arr, force_arr)[0, 0, 0, :], jax.jacrev(self.pred_acc, argnums=0)(X0_arr, force_arr)[-1, -1, -1, :]])
-        
-        # print(f'dgdX from LNN, dgdX from analytical: {dgdX},\t {np.array([[0, 1], [-Duffing_LNN.alpha - 3 * Duffing_LNN.beta * x**2, -Duffing_LNN.delta]])}')
+        dgdX = np.array([jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[0, 0, 0, :], jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[-1, -1, -1, :]])
         
         dgdT = np.array([0, force_der])
         dXdX0dot = dgdX @ dXdX0.reshape(2, 2)
@@ -123,7 +110,8 @@ class Duffing_LNN:
 
         return eig, frq, pose0
 
-    def time_solve(self, omega, T, X, pose_base, cont_params, sensitivity=True):
+    @classmethod
+    def time_solve(cls, omega, T, X, pose_base, cont_params, sensitivity=True):
         nperiod = cont_params["shooting"]["single"]["nperiod"]
         nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
         rel_tol = cont_params["shooting"]["rel_tol"]
@@ -133,21 +121,21 @@ class Duffing_LNN:
         X0[0] += pose_base
         t = np.linspace(0, T * nperiod, nsteps * nperiod + 1)
         all_ic = np.concatenate((X0, np.eye(2).flatten(), np.zeros(2)))
-        sol = odeint(self.model_sens_ode, all_ic, t, args=(T * nperiod,), rtol=rel_tol, tfirst=True)
+        sol = odeint(cls.model_sens_ode, all_ic, t, args=(T * nperiod,), rtol=rel_tol, tfirst=True)
         Xsol, M, dXdT = sol[:, :2], sol[-1, 2:6].reshape(2, 2), sol[-1, 6:]
-
+        
         # periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
         H = H.reshape(-1, 1)
 
         # Jacobian (dHdX0 and dHdt)
         dHdX0 = M - np.eye(2)
-        gX_T = self.model_ode(T * nperiod, Xsol[-1, :], T * nperiod) * nperiod
+        gX_T = cls.model_ode(T * nperiod, Xsol[-1, :], T * nperiod) * nperiod
 
         # *** Time sensitivity is not working, do finite difference for now ***
         if cont_params["continuation"]["forced"]:
             # dHdt = gX_T + dXdT
-            dHdT = self.timesens_centdiff(X0, T)
+            dHdT = cls.timesens_centdiff(X0, T)
         else:
             dHdT = gX_T
 
@@ -159,31 +147,16 @@ class Duffing_LNN:
 
         # Energy
         E0 = (
-            0.5 * (Xsol[:, 1] ** 2 + Duffing_LNN.alpha * Xsol[:, 0] ** 2)
-            + 0.25 * Duffing_LNN.beta * Xsol[:, 0] ** 4
+            0.5 * (Xsol[:, 1] ** 2 + cls.alpha * Xsol[:, 0] ** 2)
+            + 0.25 * cls.beta * Xsol[:, 0] ** 4
         )
-        force_vel = Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi) * Xsol[:, 1]
-        damping_vel = Duffing_LNN.delta * Xsol[:, 1] ** 2
+        force_vel = cls.F * np.cos(2 * np.pi / T * t + cls.phi) * Xsol[:, 1]
+        damping_vel = cls.delta * Xsol[:, 1] ** 2
         E1 = np.array(
             [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
         )
         E = E0 + E1
         energy = np.max(E)
-
-        # Acceleration
-        Xddot = (
-            Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi)
-            - Duffing_LNN.delta * Xsol[:, 1]
-            - Duffing_LNN.alpha * Xsol[:, 0]
-            - Duffing_LNN.beta * Xsol[:, 0] ** 3
-        )
-
-        # Lagrangian
-        L = (
-            0.5 * Xsol[:, 1] ** 2
-            - 0.5 * Duffing_LNN.alpha * Xsol[:, 0] ** 2
-            - 0.25 * Duffing_LNN.beta * Xsol[:, 0] ** 4
-        )
 
         cvg = True
         return H, J, pose_time, vel_time, energy, cvg
@@ -197,8 +170,8 @@ class Duffing_LNN:
             "ndof_free": cls.ndof_free,
         }
 
-
-    def monodromy_centdiff(self, t, X0, T):
+    @classmethod
+    def monodromy_centdiff(cls, t, X0, T):
         # central difference calculation of the monodromy matrix
         # can be used to check values from ode
         eps = 1e-8
@@ -206,24 +179,24 @@ class Duffing_LNN:
         for i in range(2):
             X0plus = X0.copy()
             X0plus[i] += eps
-            XTplus = np.array(odeint(self.model_ode, X0plus, t, args=(T,), tfirst=True))[-1, :]
+            XTplus = np.array(odeint(cls.model_ode, X0plus, t, args=(T,), tfirst=True))[-1, :]
             X0mins = X0.copy()
             X0mins[i] -= eps
-            XTmins = np.array(odeint(self.model_ode, X0mins, t, args=(T,), tfirst=True))[-1, :]
+            XTmins = np.array(odeint(cls.model_ode, X0mins, t, args=(T,), tfirst=True))[-1, :]
             m = (XTplus - XTmins) / (2 * eps)
             M[:, i] = m
         return M
 
-
-    def timesens_centdiff(self, X0, T):
+    @classmethod
+    def timesens_centdiff(cls, X0, T):
         # central difference calculation of the time sensitivity matrix
         # can be used to check values from ode
         eps = 1e-8
         Tplus = T + eps
         t = np.linspace(0, Tplus, 301)
-        XTplus = np.array(odeint(self.model_ode, X0, t, args=(Tplus,), tfirst=True))[-1, :]
+        XTplus = np.array(odeint(cls.model_ode, X0, t, args=(Tplus,), tfirst=True))[-1, :]
         Tmins = T - eps
         t = np.linspace(0, Tmins, 301)
-        XTmins = np.array(odeint(self.model_ode, X0, t, args=(Tmins,), tfirst=True))[-1, :]
+        XTmins = np.array(odeint(cls.model_ode, X0, t, args=(Tmins,), tfirst=True))[-1, :]
         dXdT = (XTplus - XTmins) / (2 * eps)
         return dXdT
