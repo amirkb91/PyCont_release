@@ -100,7 +100,7 @@ def update_data(file='FRF1', inplace=True):
     return info
 
 
-def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None):
+def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None, path='./data'):
     """Data generator
 
     Args:
@@ -143,7 +143,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         info = update_data(f'FRF{i}')
         
     # Save results to single file 
-    save_to_file(int(max_force_amp/min_force_amp))
+    save_to_file(int(max_force_amp/min_force_amp), path=path)
     
     return info
         

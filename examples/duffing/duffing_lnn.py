@@ -48,11 +48,19 @@ class Duffing_LNN:
         force = Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi)
         
         # Repeat along axis for vmap to work
-        X_arr = jnp.tile(X, (2, 1))
-        force_arr = jnp.tile(force, (2, 1))
+        X_arr = jnp.tile(X, (1, 1))
+        force_arr = jnp.tile(force, (1, 1))
         
         xddot_arr = jax.jit(self.pred_acc)(X_arr, force_arr)
         xddot = xddot_arr[0, -1]
+        
+        # TODO: Remove Comment
+        diff = xddot - (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))
+        if np.abs(diff) > 1.0:
+            print(f'MODEL ODE')
+            print(f'xdddot from LNN: {xddot}')
+            print(f'xdddot from analytical: {force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3)}')
+            print(f'LNN/analytical: {xddot / (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))}')
    
         Xdot = np.array([xdot, xddot])
         return Xdot
@@ -77,8 +85,8 @@ class Duffing_LNN:
         force = Duffing_LNN.F * np.cos(2 * np.pi / T * t + Duffing_LNN.phi)
         
         # Repeat along axis for vmap to work
-        X0_arr = jnp.tile(X0, (2, 1))
-        force_arr = jnp.tile(force, (2, 1))
+        X0_arr = jnp.tile(X0, (1, 1))
+        force_arr = jnp.tile(force, (1, 1))
         
         xddot_arr = jax.jit(self.pred_acc)(X0_arr, force_arr)
         xddot = xddot_arr[0, -1]
@@ -86,7 +94,17 @@ class Duffing_LNN:
         force_der = -Duffing_LNN.F * np.sin(2 * np.pi / T * t + Duffing_LNN.phi) * 2 * np.pi * t / T**2
         Xdot = np.array([xdot, xddot])
         
+        # TODO: Remove Comment
+        diff = xddot - (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))
+        if np.abs(diff) > 1.0:
+            print(f'MODEL SENS ODE')
+            print(f'xdddot from LNN: {xddot}')
+            print(f'xdddot from analytical: {force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3)}')
+            print(f'LNN/analytical: {xddot / (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))}')
+        
         dgdX = np.array([jax.jacrev(self.pred_acc, argnums=0)(X0_arr, force_arr)[0, 0, 0, :], jax.jacrev(self.pred_acc, argnums=0)(X0_arr, force_arr)[-1, -1, -1, :]])
+        
+        # print(f'dgdX from LNN, dgdX from analytical: {dgdX},\t {np.array([[0, 1], [-Duffing_LNN.alpha - 3 * Duffing_LNN.beta * x**2, -Duffing_LNN.delta]])}')
         
         dgdT = np.array([0, force_der])
         dXdX0dot = dgdX @ dXdX0.reshape(2, 2)
