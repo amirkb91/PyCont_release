@@ -56,7 +56,7 @@ class Duffing_LNN:
         
         # TODO: Remove Comment
         diff = xddot - (force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3))
-        if np.abs(diff) > 1.0:
+        if np.abs(diff) > 0.01:
             print(f'MODEL ODE')
             print(f'xdddot from LNN: {xddot}')
             print(f'xdddot from analytical: {force - (Duffing_LNN.delta * xdot + Duffing_LNN.alpha * x + Duffing_LNN.beta * x**3)}')
