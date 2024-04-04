@@ -10,6 +10,9 @@ from haiku.initializers import VarianceScaling
 from functools import partial
 from datetime import datetime
 
+from jax import config
+config.update("jax_enable_x64", True)
+
 
 class Damped_MLP(hk.Module):
     """

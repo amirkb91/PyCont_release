@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from scipy.integrate import odeint, simps
 import scipy.linalg as spl
 
+from jax import config
+config.update("jax_enable_x64", True)
 
 class Duffing_LNN:
     # Physical System to Predict:
