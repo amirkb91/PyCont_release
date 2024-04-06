@@ -10,10 +10,6 @@ from haiku.initializers import VarianceScaling
 from functools import partial
 from datetime import datetime
 
-from jax import config
-config.update("jax_enable_x64", True)
-
-
 class Damped_MLP(hk.Module):
     """
     Define the 1DOF damped lagrangian neural network with this class.
@@ -27,7 +23,7 @@ class Damped_MLP(hk.Module):
         lag_layers, damp_layers = [], []
         lag_units, damp_units = MODEL['lag_units'], MODEL['damp_units']
         layers = MODEL['layers']
-        activation = jax.nn.softplus
+        activation = jax.nn.silu
         glorot_uniform = VarianceScaling(1.0, 'fan_avg', 'uniform')
 
         for layer in range(layers):
@@ -104,7 +100,7 @@ class BaseModel():
     def gather(self):
         """Initialize network parameters, the haiku function containing the network, the loss function && the update function"""
         # Initialize network parameters with the shape of init_data
-        init_data = jnp.zeros((self.input_shape), dtype=jnp.float64)
+        init_data = jnp.zeros((self.input_shape), dtype=jnp.float32)
         params, net = self._compile(
             self.settings, self.hk_module, self.key, init_data)
 
@@ -351,8 +347,8 @@ class Damped_LNN(BaseModel):
     def _dynamics(self):
         net = self.net
 
-        qmax = jnp.array([self.info['qmax']], dtype=jnp.float64)
-        q_dmax = jnp.array([self.info['qdmax']], dtype=jnp.float64)
+        qmax = jnp.array([self.info['qmax']], dtype=jnp.float32)
+        q_dmax = jnp.array([self.info['qdmax']], dtype=jnp.float32)
 
         def dynamics(params):
 

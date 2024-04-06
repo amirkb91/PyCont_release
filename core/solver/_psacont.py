@@ -101,7 +101,7 @@ def psacont(self):
             if not forced:
                 dxt = spl.lstsq(Jcr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             elif forced:
-                dxt = spl.solve(Jcr, -Z, check_finite=False)
+                dxt = spl.solve(Jcr, -Z, check_finite=True)
             tau_pred += dxt[-1, 0]
             dx = dxt[:-1, 0]
             X_pred += dx
