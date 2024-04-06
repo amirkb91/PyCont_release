@@ -5,7 +5,7 @@
     "tangent": "keller",
     "dir": 1,
     "npts": 500,
-    "tol": 1e-06,
+    "tol": 0.0001,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
@@ -35,7 +35,7 @@
     }
   },
   "forcing": {
-    "amplitude": 0.1,
+    "amplitude": 0.4,
     "phase_ratio": 0.5,
     "tau0": 0.05,
     "tau1": 0,
@@ -58,6 +58,6 @@
   },
   "Logger": {
     "plot": false,
-    "file_name": "FRF1"
+    "file_name": "FRF4"
   }
 }
