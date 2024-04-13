@@ -1,7 +1,8 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
-from scipy.integrate import odeint, simps
+from scipy.integrate import odeint
+import cmath
 
 class Duffing_LNN:
     # Physical System to Predict:
@@ -107,12 +108,15 @@ class Duffing_LNN:
 
     @classmethod
     def eigen_solve(cls):
-        frq = np.array([[cls.alpha]])  
+        frq = np.array([[cls.alpha]])
         frq = np.sqrt(frq) / (2 * np.pi)
         eig = np.array([[1.0]])
 
-        # Initial position taken as zero
-        pose0 = 0.0 # TODO: Teams Chat
+        # REVIEW: Initial position taken as zero
+        omega = np.sqrt(frq)
+        pose0 = cls.F * jnp.cos(cls.phi) / (-omega**2 + complex(0, omega*cls.delta) + cls.alpha)
+        print(f"pose0: {pose0.real}, imag: {pose0.imag}")
+        pose0 = pose0.real
 
         return eig, frq, pose0
 
@@ -151,7 +155,7 @@ class Duffing_LNN:
         pose_time = Xsol[:, 0].reshape(1, -1)
         vel_time = Xsol[:, 1].reshape(1, -1)
 
-        # Energy: Hamiltonian from Lagrangian
+        # REVIEW: Energy: Hamiltonian from Lagrangian
         # dL/ddq * dq - L: https://physics.stackexchange.com/questions/190471/constructing-lagrangian-from-the-hamiltonian#:~:text=Given%20the%20Lagrangian%20L%20for,we%20need%20to%20know%20L.
         Lnn, Dnn = cls.pred_energy(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))
         dLddq = jax.jacobian(cls.pred_energy, 1)(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))[0]
