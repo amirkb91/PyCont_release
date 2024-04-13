@@ -32,9 +32,10 @@ def run():
     con = ConX(prob, start, log)
     con.solve()
     
-def run_LNN(predict_acc):
+def run_LNN(predict_acc, pred_energy):
     # Instantiate object with trained LNN
     Duffing_LNN.LNN_acceleration(pred_acc=predict_acc)
+    Duffing_LNN.LNN_energy(pred_energy=pred_energy)
     
     # Problem
     prob = Prob()
