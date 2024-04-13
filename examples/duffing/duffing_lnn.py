@@ -115,7 +115,6 @@ class Duffing_LNN:
         # REVIEW: Initial position taken as zero
         omega = np.sqrt(frq)
         pose0 = cls.F * jnp.cos(cls.phi) / (-omega**2 + complex(0, omega*cls.delta) + cls.alpha)
-        print(f"pose0: {pose0.real}, imag: {pose0.imag}")
         pose0 = pose0.real
 
         return eig, frq, pose0
