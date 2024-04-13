@@ -23,6 +23,11 @@ class Duffing_LNN:
     def LNN_acceleration(cls, pred_acc):
         # Acceleration predicted by LNN
         cls.pred_acc = pred_acc
+        
+    @classmethod
+    def LNN_energy(cls, pred_energy):
+        # LNN & DNN
+        cls.pred_energy = pred_energy
 
     @classmethod
     def forcing_parameters(cls, cont_params):
@@ -55,6 +60,7 @@ class Duffing_LNN:
         xddot_arr = jax.jit(cls.pred_acc)(X_arr, force_arr)
         xddot = xddot_arr[0, -1]
    
+        # State-space Vector for EoM
         Xdot = np.array([xdot, xddot])
         
         return Xdot
@@ -77,7 +83,9 @@ class Duffing_LNN:
         x = X0[0]
         xdot = X0[1]
         # Predict Acceleration
-        force = cls.F * np.cos(2 * np.pi / T * t + cls.phi)
+        def force_func(t, T):
+            return cls.F * jnp.cos(2 * jnp.pi / T * t + cls.phi)
+        force = force_func(t, T)
         
         # Repeat along axis for vmap to work
         X0_arr = jnp.tile(X0, (1, 1))
@@ -86,7 +94,7 @@ class Duffing_LNN:
         xddot_arr = jax.jit(cls.pred_acc)(X0_arr, force_arr)
         xddot = xddot_arr[0, -1]
         
-        force_der = -cls.F * np.sin(2 * np.pi / T * t + cls.phi) * 2 * np.pi * t / T**2
+        force_der = jax.jacrev(force_func, argnums=1)(t, T)
         Xdot = np.array([xdot, xddot])
         
         dgdX = np.array([jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[0, 0, 0, :], jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[-1, -1, -1, :]])
@@ -99,12 +107,12 @@ class Duffing_LNN:
 
     @classmethod
     def eigen_solve(cls):
-        frq = np.array([[cls.alpha]])  # REVIEW: Assumed for LNN
+        frq = np.array([[cls.alpha]])  
         frq = np.sqrt(frq) / (2 * np.pi)
         eig = np.array([[1.0]])
 
         # Initial position taken as zero
-        pose0 = 0.0
+        pose0 = 0.0 # TODO: Teams Chat
 
         return eig, frq, pose0
 
@@ -143,18 +151,19 @@ class Duffing_LNN:
         pose_time = Xsol[:, 0].reshape(1, -1)
         vel_time = Xsol[:, 1].reshape(1, -1)
 
-        # Energy
-        E0 = (
-            0.5 * (Xsol[:, 1] ** 2 + cls.alpha * Xsol[:, 0] ** 2)
-            + 0.25 * cls.beta * Xsol[:, 0] ** 4
-        )
-        force_vel = cls.F * np.cos(2 * np.pi / T * t + cls.phi) * Xsol[:, 1]
-        damping_vel = cls.delta * Xsol[:, 1] ** 2
-        E1 = np.array(
-            [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
-        )
-        E = E0 + E1
-        energy = np.max(E)
+        # Energy: Hamiltonian from Lagrangian
+        # dL/ddq * dq - L: https://physics.stackexchange.com/questions/190471/constructing-lagrangian-from-the-hamiltonian#:~:text=Given%20the%20Lagrangian%20L%20for,we%20need%20to%20know%20L.
+        Lnn, Dnn = cls.pred_energy(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))
+        dLddq = jax.jacobian(cls.pred_energy, 1)(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))[0]
+        
+        ham = jnp.dot(Xsol[:, 1], dLddq) - Lnn
+        energy = np.max(ham)
+        
+        # M = jax.hessian(cls.pred_energy, 1)(X[0], X[1])[0]
+        # K = jax.jacobian(cls.pred_energy, 0)(X[0], X[1])[0]
+        # D = jax.jacobian(cls.pred_energy, 1)(X[0], X[1])[1]
+        # GC1 = jax.jacfwd(jax.jacrev(cls.pred_energy, 1), 0)(X[0], X[1])[0]
+        # GCQ = jnp.dot(GC1, X[1])
 
         cvg = True
         return H, J, pose_time, vel_time, energy, cvg
@@ -167,23 +176,6 @@ class Duffing_LNN:
             "ndof_fix": cls.ndof_fix,
             "ndof_free": cls.ndof_free,
         }
-
-    @classmethod
-    def monodromy_centdiff(cls, t, X0, T):
-        # central difference calculation of the monodromy matrix
-        # can be used to check values from ode
-        eps = 1e-8
-        M = np.zeros([2, 2])
-        for i in range(2):
-            X0plus = X0.copy()
-            X0plus[i] += eps
-            XTplus = np.array(odeint(cls.model_ode, X0plus, t, args=(T,), tfirst=True))[-1, :]
-            X0mins = X0.copy()
-            X0mins[i] -= eps
-            XTmins = np.array(odeint(cls.model_ode, X0mins, t, args=(T,), tfirst=True))[-1, :]
-            m = (XTplus - XTmins) / (2 * eps)
-            M[:, i] = m
-        return M
 
     @classmethod
     def timesens_centdiff(cls, X0, T):
