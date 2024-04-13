@@ -100,7 +100,7 @@ def update_data(file='FRF1', inplace=True):
     return info
 
 
-def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None, path='./data'):
+def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None, pred_energy=None, path='./data'):
     """Data generator
 
     Args:
@@ -135,7 +135,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
             
         # Run continuation
         if predict_acc is not None:
-            run_LNN(predict_acc)
+            run_LNN(predict_acc, pred_energy)
         else:
             run()
         
