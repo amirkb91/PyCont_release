@@ -346,3 +346,73 @@ def train_test_data(
     info['fmax'] = train_dataset['f'].max()
     
     return train_dataset, test_dataset, info
+
+def compare_sols(anal_file='data/FRF1', lnn_file='data_LNN/FRF1'):
+    """Compare periodic solutions
+
+    Args:
+        anal_file (str, optional): File with analytical results.
+        lnn_file (str, optional): File with LNN results.
+    """
+    title = anal_file.split("/")[1]
+    
+    # Get data
+    if not anal_file.endswith(".h5"):
+            anal_file += ".h5"
+    anal_data = h5py.File(str(anal_file), "r")
+    
+    if not lnn_file.endswith(".h5"):
+            lnn_file += ".h5"
+    lnn_data = h5py.File(str(lnn_file), "r")
+    
+    # Position, Velocity, Acceleration, Force, Time
+    ## Note: 
+    # >>> COL -> Number of Periodic Solutions
+    # >>> ROW -> Number of Solution Points
+    anal_pose = anal_data["/Config_Time/POSE"][:].squeeze()
+    anal_vel = anal_data["/Config_Time/VELOCITY"][:].squeeze()
+    anal_acc = anal_data["/Config_Time/ACCELERATION"][:].squeeze()
+    anal_force = anal_data["/Config_Time/Force"][:].squeeze()
+    anal_time = anal_data["/Config_Time/Time"][:].squeeze()
+    # Period (Frequency) for Periodic Solution
+    anal_T = anal_data["/T"][:]
+    
+    lnn_pose = lnn_data["/Config_Time/POSE"][:].squeeze()
+    lnn_vel = lnn_data["/Config_Time/VELOCITY"][:].squeeze()
+    lnn_acc = lnn_data["/Config_Time/ACCELERATION"][:].squeeze()
+    lnn_force = lnn_data["/Config_Time/Force"][:].squeeze()
+    lnn_time = lnn_data["/Config_Time/Time"][:].squeeze()
+    # Period (Frequency) for Periodic Solution
+    lnn_T = lnn_data["/T"][:]
+    
+    # Plot figures
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+
+    # Plot NLFR
+    ax[0, 0].set_title(f'{title}', fontsize=14)
+    ax[0, 0].plot(1/anal_T, np.max(anal_pose, axis=0), label='Analytical')
+    ax[0, 0].plot(1/lnn_T, np.max(lnn_pose, axis=0), '--', label='LNN')
+    ax[0, 0].set_xlabel(r'Frequency, $1/T$', fontsize=12)
+    ax[0, 0].set_ylabel(r'Amplitude, $x$', fontsize=12)
+    
+    # Plot position, velocity & time
+    ax[0, 1].set_title('Position', fontsize=14)
+    ax[0, 1].plot(anal_time[:, 0], anal_pose[:, 0], label='Analytical')
+    ax[0, 1].plot(lnn_time[:, 0], lnn_pose[:, 0], '--', label='LNN')
+    ax[0, 1].set_xlabel(r'$t$', fontsize=12)
+    ax[0, 1].set_ylabel(r'${x}$', fontsize=12)
+
+    ax[1, 0].set_title('Velocity', fontsize=14)
+    ax[1, 0].plot(anal_time[:, 0], anal_vel[:, 0], label='Analytical')
+    ax[1, 0].plot(lnn_time[:, 0], lnn_vel[:, 0], '--', label='LNN')
+    ax[1, 0].set_xlabel(r'$t$', fontsize=12)
+    ax[1, 0].set_ylabel(r'$\dot{x}$', fontsize=12)
+
+    ax[1, 1].set_title('Acceleration', fontsize=14)
+    ax[1, 1].plot(anal_time[:, 0], anal_acc[:, 0], label='Analytical')
+    ax[1, 1].plot(lnn_time[:, 0], lnn_acc[:, 0], '--', label='LNN')
+    ax[1, 1].set_xlabel(r'$t$', fontsize=12)
+    ax[1, 1].set_ylabel(r'$\ddot{x}$', fontsize=12)
+
+    ax[0,0].legend()
+    fig.tight_layout()
