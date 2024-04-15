@@ -10,94 +10,7 @@ import matplotlib.pyplot as plt
 
 from duffing import Duffing
 from duffing_lnn import Duffing_LNN
-from runscript import run, run_LNN
-
-def update_data(file='FRF1', inplace=True):
-    """Run time simulations to store acceleration data
-
-    Args:
-        file (str, optional): File with Continuation results. Defaults to 'FRF1'.
-        inplace (bool, optional): Modify file or create new file. Defaults to True.
-    """
-    if not file.endswith(".h5"):
-        file += ".h5"
-
-    data = h5py.File(str(file), "r")
-    pose = data["/Config/POSE"][:]
-    vel = data["/Config/VELOCITY"][:]
-    T = data["/T"][:]
-    par = data["/Parameters"]
-    par = json.loads(par[()])
-    data.close()
-
-    # Create new file to store time histories or append inplace
-    if inplace:
-        new_file = file
-    else:
-        new_file = file.strip(".h5") + "_withtime.h5"
-        shutil.copy(file, new_file)
-
-    n_solpoints = len(T)
-    nsteps = par["shooting"]["single"]["nsteps_per_period"]
-    pose_time = np.zeros([np.shape(pose)[0], nsteps + 1, n_solpoints])
-    vel_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
-    acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
-    force_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
-    time = np.zeros([n_solpoints, nsteps + 1])
-
-    # Run sims
-    Duffing.forcing_parameters(par)
-    with alive_bar(n_solpoints) as bar:
-        for i in range(n_solpoints):
-            X = np.array([0.0, vel[0, i]])
-            [_, J, pose_time[:, :, i], vel_time[:, :, i], _, _] = Duffing.time_solve(
-                1.0, T[i], X, pose[0, i], par
-            )
-
-            time[i, :] = np.linspace(0, T[i], nsteps + 1)
-            # Acceleration
-            acc_time[:, :, i] = (
-                Duffing.F * np.cos((2 * np.pi / T[i]) * time[i, :] + Duffing.phi)
-                - Duffing.delta * vel_time[:, :, i]
-                - Duffing.alpha * pose_time[:, :, i]
-                - Duffing.beta * pose_time[:, :, i] ** 3
-            )
-            # Force
-            force_time[:, :, i] = (
-                Duffing.F * np.cos((2 * np.pi / T[i]) * time[i, :] + Duffing.phi)
-            )
-            bar()
-
-    # Write to file
-    time_data = h5py.File(new_file, "a")
-    if "/Config_Time/POSE" in time_data.keys():
-        del time_data["/Config_Time/POSE"]
-    if "/Config_Time/VELOCITY" in time_data.keys():
-        del time_data["/Config_Time/VELOCITY"]
-    if "/Config_Time/ACCELERATION" in time_data.keys():
-        del time_data["/Config_Time/ACCELERATION"]
-    if "/Config_Time/Force" in time_data.keys():
-        del time_data["/Config_Time/Force"]
-    if "/Config_Time/Time" in time_data.keys():
-        del time_data["/Config_Time/Time"]
-    time_data["/Config_Time/POSE"] = pose_time
-    time_data["/Config_Time/VELOCITY"] = vel_time
-    time_data["/Config_Time/ACCELERATION"] = acc_time
-    time_data["/Config_Time/Force"] = force_time
-    time_data["/Config_Time/Time"] = time.T
-    time_data.close()
-    
-    # Physical System
-    info = {}
-    info['delta'] = Duffing.delta
-    info['alpha'] = Duffing.alpha
-    info['beta'] = Duffing.beta
-    info['M'] = 1.0
-    info['K'] = Duffing.alpha * info['M']
-    info['C'] = Duffing.delta * info['M']
-    info['NL'] = Duffing.beta * info['M']
-    
-    return info
+from runscript import run
 
 
 def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None, pred_energy=None, path='./data'):
@@ -134,10 +47,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
             json.dump(data, file, indent = 2)
             
         # Run continuation
-        if predict_acc is not None:
-            run_LNN(predict_acc, pred_energy)
-        else:
-            run()
+        run(model=Duffing, predict_acc=predict_acc, pred_energy=pred_energy)
         
         # Add acceleration & forcing
         info = update_data(f'FRF{i}')
@@ -146,64 +56,96 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
     save_to_file(int(max_force_amp/min_force_amp), path=path)
     
     return info
-        
-        
-def plot_sols(file='data/FRF1'):
-    """Plot periodic solutions & return data (if needed)
+
+def update_data(file='FRF1', inplace=True, isLNN=False):
+    """Run time simulations to store acceleration data
 
     Args:
-        file (str, optional): File to plot. Defaults to 'FRF1'.
+        file (str, optional): File with Continuation results. Defaults to 'FRF1'.
+        inplace (bool, optional): Modify file or create new file. Defaults to True.
     """
-    # Get data
     if not file.endswith(".h5"):
-            file += ".h5"
+        file += ".h5"
+
     data = h5py.File(str(file), "r")
-    
-    # Position, Velocity, Acceleration, Force = F*cos(2pi/T*t + phi), Time
-    ## Note: 
-    # >>> COL -> Number of Periodic Solutions
-    # >>> ROW -> Number of Solution Points
-    pose = data["/Config_Time/POSE"][:].squeeze()
-    vel = data["/Config_Time/VELOCITY"][:].squeeze()
-    acc = data["/Config_Time/ACCELERATION"][:].squeeze()
-    force = data["/Config_Time/Force"][:].squeeze()
-    time = data["/Config_Time/Time"][:].squeeze()
-    # Period (Frequency) for Periodic Solution
+    pose = data["/Config/POSE"][:]
+    vel = data["/Config/VELOCITY"][:]
     T = data["/T"][:]
+    par = data["/Parameters"]
+    par = json.loads(par[()])
+    data.close()
+
+    # Create new file to store time histories or append inplace
+    if inplace:
+        new_file = file
+    else:
+        new_file = file.strip(".h5") + "_withtime.h5"
+        shutil.copy(file, new_file)
+
     n_solpoints = len(T)
+    nsteps = par["shooting"]["single"]["nsteps_per_period"]
+    pose_time = np.zeros([np.shape(pose)[0], nsteps + 1, n_solpoints])
+    vel_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
+    acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
+    force_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
+    time = np.zeros([n_solpoints, nsteps + 1])
     
-    # Plot figures
-    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
+    # Analytical vs LNN class
+    model = Duffing_LNN if isLNN else Duffing
 
-    # Plot Family of Periodic Solutions in Phase Space
-    ax[0, 0].set_title('Family of Periodic Solutions in Phase Space', fontsize=12)
-    ax[0, 0].plot(pose[:, ::30], vel[:, ::30])
-    ax[0, 0].set_xlabel(r'$x$', fontsize=12)
-    ax[0, 0].set_ylabel(r'$\dot{x}$', fontsize=12)
+    # Run sims
+    model.forcing_parameters(par)
+    with alive_bar(n_solpoints) as bar:
+        for i in range(n_solpoints):
+            X = np.array([0.0, vel[0, i]])
+            [_, J, pose_time[:, :, i], vel_time[:, :, i], _, _] = model.time_solve(
+                1.0, T[i], X, pose[0, i], par
+            )
 
-    # Plot NLFR
-    ax[0, 1].set_title(f'Frequency-Response Curve', fontsize=10)
-    ax[0, 1].plot(1/T, np.max(pose, axis=0))
-    ax[0, 1].set_xlabel(r'Period, $T$', fontsize=12)
-    ax[0, 1].set_ylabel(r'Amplitude, $x$', fontsize=12)
+            time[i, :] = np.linspace(0, T[i], nsteps + 1)
+            # Acceleration
+            acc_time[:, :, i] = (
+                model.F * np.cos((2 * np.pi / T[i]) * time[i, :] + model.phi)
+                - model.delta * vel_time[:, :, i]
+                - model.alpha * pose_time[:, :, i]
+                - model.beta * pose_time[:, :, i] ** 3
+            )
+            # Force
+            force_time[:, :, i] = (
+                model.F * np.cos((2 * np.pi / T[i]) * time[i, :] + model.phi)
+            )
+            bar()
+
+    # Write to file
+    time_data = h5py.File(new_file, "a")
+    if "/Config_Time/POSE" in time_data.keys():
+        del time_data["/Config_Time/POSE"]
+    if "/Config_Time/VELOCITY" in time_data.keys():
+        del time_data["/Config_Time/VELOCITY"]
+    if "/Config_Time/ACCELERATION" in time_data.keys():
+        del time_data["/Config_Time/ACCELERATION"]
+    if "/Config_Time/Force" in time_data.keys():
+        del time_data["/Config_Time/Force"]
+    if "/Config_Time/Time" in time_data.keys():
+        del time_data["/Config_Time/Time"]
+    time_data["/Config_Time/POSE"] = pose_time
+    time_data["/Config_Time/VELOCITY"] = vel_time
+    time_data["/Config_Time/ACCELERATION"] = acc_time
+    time_data["/Config_Time/Force"] = force_time
+    time_data["/Config_Time/Time"] = time.T
+    time_data.close()
     
-    # Plot position, velocity & time
-    ax[1, 0].set_title('Position', fontsize=10)
-    ax[1, 0].plot(time[:, 0], pose[:, 0])
-    ax[1, 0].set_xlabel(r'$t$')
-    ax[1, 0].set_ylabel(r'${x}$')
-
-    ax[1, 1].set_title('Velocity', fontsize=10)
-    ax[1, 1].plot(time[:, 0], vel[:, 0])
-    ax[1, 1].set_xlabel(r'$t$')
-    ax[1, 1].set_ylabel(r'$\dot{x}$')
-
-    ax[2, 0].set_title('Acceleration', fontsize=10)
-    ax[2, 0].plot(time[:, 0], acc[:, 0])
-    ax[2, 0].set_xlabel(r'$t$')
-    ax[2, 0].set_ylabel(r'$\ddot{x}$')
-
-    fig.tight_layout()
+    # Physical System
+    info = {}
+    info['delta'] = model.delta
+    info['alpha'] = model.alpha
+    info['beta'] = model.beta
+    info['M'] = 1.0
+    info['K'] = model.alpha * info['M']
+    info['C'] = model.delta * info['M']
+    info['NL'] = model.beta * info['M']
+    
+    return info
 
 
 def save_to_file(num_files=10, filename='FRF', path='./data'):
@@ -347,6 +289,8 @@ def train_test_data(
     
     return train_dataset, test_dataset, info
 
+# -------------------------- VISUALIZATION FUNCTIONS ------------------------- #
+
 def compare_sols(anal_file='data/FRF1', lnn_file='data_LNN/FRF1'):
     """Compare periodic solutions
 
@@ -415,4 +359,61 @@ def compare_sols(anal_file='data/FRF1', lnn_file='data_LNN/FRF1'):
     ax[1, 1].set_ylabel(r'$\ddot{x}$', fontsize=12)
 
     ax[0,0].legend()
+    fig.tight_layout()
+    
+def plot_sols(file='data/FRF1'):
+    """Plot periodic solutions & return data (if needed)
+
+    Args:
+        file (str, optional): File to plot. Defaults to 'FRF1'.
+    """
+    # Get data
+    if not file.endswith(".h5"):
+            file += ".h5"
+    data = h5py.File(str(file), "r")
+    
+    # Position, Velocity, Acceleration, Force = F*cos(2pi/T*t + phi), Time
+    ## Note: 
+    # >>> COL -> Number of Periodic Solutions
+    # >>> ROW -> Number of Solution Points
+    pose = data["/Config_Time/POSE"][:].squeeze()
+    vel = data["/Config_Time/VELOCITY"][:].squeeze()
+    acc = data["/Config_Time/ACCELERATION"][:].squeeze()
+    force = data["/Config_Time/Force"][:].squeeze()
+    time = data["/Config_Time/Time"][:].squeeze()
+    # Period (Frequency) for Periodic Solution
+    T = data["/T"][:]
+    n_solpoints = len(T)
+    
+    # Plot figures
+    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
+
+    # Plot Family of Periodic Solutions in Phase Space
+    ax[0, 0].set_title('Family of Periodic Solutions in Phase Space', fontsize=12)
+    ax[0, 0].plot(pose[:, ::30], vel[:, ::30])
+    ax[0, 0].set_xlabel(r'$x$', fontsize=12)
+    ax[0, 0].set_ylabel(r'$\dot{x}$', fontsize=12)
+
+    # Plot NLFR
+    ax[0, 1].set_title(f'Frequency-Response Curve', fontsize=10)
+    ax[0, 1].plot(1/T, np.max(pose, axis=0))
+    ax[0, 1].set_xlabel(r'Period, $T$', fontsize=12)
+    ax[0, 1].set_ylabel(r'Amplitude, $x$', fontsize=12)
+    
+    # Plot position, velocity & time
+    ax[1, 0].set_title('Position', fontsize=10)
+    ax[1, 0].plot(time[:, 0], pose[:, 0])
+    ax[1, 0].set_xlabel(r'$t$')
+    ax[1, 0].set_ylabel(r'${x}$')
+
+    ax[1, 1].set_title('Velocity', fontsize=10)
+    ax[1, 1].plot(time[:, 0], vel[:, 0])
+    ax[1, 1].set_xlabel(r'$t$')
+    ax[1, 1].set_ylabel(r'$\dot{x}$')
+
+    ax[2, 0].set_title('Acceleration', fontsize=10)
+    ax[2, 0].plot(time[:, 0], acc[:, 0])
+    ax[2, 0].set_xlabel(r'$t$')
+    ax[2, 0].set_ylabel(r'$\ddot{x}$')
+
     fig.tight_layout()
