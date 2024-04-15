@@ -13,7 +13,7 @@ from duffing_lnn import Duffing_LNN
 from runscript import run
 
 
-def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, predict_acc=None, pred_energy=None, path='./data'):
+def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, isLNN=False, predict_acc=None, pred_energy=None, path='./data'):
     """Data generator
 
     Args:
@@ -46,11 +46,14 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         with open(file_name, 'w') as file:
             json.dump(data, file, indent = 2)
             
+        # Analytical vs LNN class
+        model = Duffing_LNN if isLNN else Duffing
+                   
         # Run continuation
-        run(model=Duffing, predict_acc=predict_acc, pred_energy=pred_energy)
+        run(model=model, predict_acc=predict_acc, pred_energy=pred_energy)
         
         # Add acceleration & forcing
-        info = update_data(f'FRF{i}')
+        info = update_data(file=f'FRF{i}', isLNN=isLNN)
         
     # Save results to single file 
     save_to_file(int(max_force_amp/min_force_amp), path=path)
@@ -286,6 +289,30 @@ def train_test_data(
     info['qddmax'] = train_dataset['ddx'][:, 0].max()
     info['t'] = train_dataset['t'][:, 0].max()
     info['fmax'] = train_dataset['f'].max()
+    
+    return train_dataset, test_dataset, info
+
+
+def format_to_LNN(old_train_dataset, old_test_dataset, info):
+    """_summary_
+
+    Args:
+        old_train_dataset (dict): Training dataset with keys ['x', 'dx', 'ddx', 't', 'f'] 
+        old_test_dataset (dict): Test dataset with keys ['x', 'dx', 'ddx', 't', 'f'] 
+        info (dict): Information about physical system
+    """
+    
+    # Position, velocity & total forcing conditions
+    train_x = np.vstack((old_train_dataset['x'].flatten(), old_train_dataset['dx'].flatten())).T
+    train_f = old_train_dataset['f'].flatten()
+    train_dx = np.vstack((old_train_dataset['dx'].flatten(), old_train_dataset['ddx'].flatten())).T
+
+    test_x = np.vstack((old_test_dataset['x'].flatten(), old_test_dataset['dx'].flatten())).T
+    test_f = old_test_dataset['f'].flatten()
+    test_dx = np.vstack((old_test_dataset['dx'].flatten(), old_test_dataset['ddx'].flatten())).T
+
+    train_dataset = train_x, train_f, train_dx
+    test_dataset = test_x, test_f, test_dx
     
     return train_dataset, test_dataset, info
 
