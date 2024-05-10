@@ -83,7 +83,7 @@ class Duffing_LNN:
         X0, dXdX0, dXdT = ic[:2], ic[2:6], ic[6:]
         x = X0[0]
         xdot = X0[1]
-        # Predict Acceleration
+        # REVIEW: Predict Acceleration
         def force_func(t, T):
             return cls.F * jnp.cos(2 * jnp.pi / T * t + cls.phi)
         force = force_func(t, T)
@@ -158,7 +158,7 @@ class Duffing_LNN:
         # dL/ddq * dq - L: https://physics.stackexchange.com/questions/190471/constructing-lagrangian-from-the-hamiltonian#:~:text=Given%20the%20Lagrangian%20L%20for,we%20need%20to%20know%20L.
         Lnn, Dnn = cls.pred_energy(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))
         dLddq = jax.jacobian(cls.pred_energy, 1)(Xsol[:, 0].reshape(-1, 1), Xsol[:, 1].reshape(-1, 1))[0]
-        
+        # TODO: Check if Lnn or ham is scalar; add statistics to plot
         ham = jnp.dot(Xsol[:, 1], dLddq) - Lnn
         energy = np.max(ham)
         

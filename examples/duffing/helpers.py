@@ -106,7 +106,7 @@ def update_data(file='FRF1', inplace=True, isLNN=False):
             )
 
             time[i, :] = np.linspace(0, T[i], nsteps + 1)
-            # Acceleration
+            # REVIEW: Acceleration 
             acc_time[:, :, i] = (
                 model.F * np.cos((2 * np.pi / T[i]) * time[i, :] + model.phi)
                 - model.delta * vel_time[:, :, i]
