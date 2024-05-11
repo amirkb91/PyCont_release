@@ -35,7 +35,7 @@
     }
   },
   "forcing": {
-    "amplitude": 0.2,
+    "amplitude": 1.0,
     "phase_ratio": 0.5,
     "tau0": 0.05,
     "tau1": 0,
@@ -58,6 +58,6 @@
   },
   "Logger": {
     "plot": false,
-    "file_name": "FRF2"
+    "file_name": "FRF10"
   }
 }

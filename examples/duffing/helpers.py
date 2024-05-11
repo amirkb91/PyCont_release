@@ -27,6 +27,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
     # Range only works with integers
     min_force_amp = int(min_force_amp*10)
     max_force_amp = int(max_force_amp*10)
+    step = (max_force_amp - min_force_amp)/(num-1)
     
     for i in range(1, num+1):
         # Open contparameters.json
@@ -37,7 +38,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
             data['forcing']['tau0'] = damping
         
             # Modify forcing amplitude
-            data['forcing']['amplitude'] = 0.1*i
+            data['forcing']['amplitude'] = min_force_amp + step
             # Save file
             data['Logger']['file_name'] = f'FRF{i}'
         
@@ -321,9 +322,6 @@ def train_test_data(
     # Read data
     with open(save_file, 'rb') as fp:
         data = pickle.load(fp)
-        
-    # Extract each forcing condition
-    all_conds = [(k, v) for k, v in data.items()]
     
     # Store ML data
     x_train = np.array([])
@@ -336,43 +334,31 @@ def train_test_data(
     ddx_test = np.array([])
     t_test = np.array([])
     f_test = np.array([])
-    
+
     # Loop over data
     for k, v in data.items():
-        pose = data[k]["pose"]
-        vel = data[k]["vel"]
-        acc = data[k]["acc"]
-        time = data[k]["time"]
-        force = data[k]["force"]
-        T = data[k]["T"]
+        pose = data[k]["pose"].flatten()
+        vel = data[k]["vel"].flatten()
+        acc = data[k]["acc"].flatten()
+        time = data[k]["time"].flatten()
+        force = data[k]["force"].flatten()
+        T = data[k]["T"].flatten()
         
         # Create train & test split with equal split for each forcing amplitude
-        pose_train, pose_test, vel_train, vel_test, acc_train, acc_test, time_train, time_test, force_train, force_test = train_test_split(pose, vel, acc, time, force, test_size=split_size, random_state=42, shuffle=True)
+        pose_train, pose_test, vel_train, vel_test, acc_train, acc_test, time_train, time_test, force_train, force_test = train_test_split(pose, vel, acc, time, force, test_size=0.2, random_state=42, shuffle=True)
         
-        # Reshape array
-        x_train = x_train.reshape(pose_train.shape[0], -1)
-        dx_train = dx_train.reshape(vel_train.shape[0], -1)
-        ddx_train = ddx_train.reshape(acc_train.shape[0], -1)
-        t_train = t_train.reshape(time_train.shape[0], -1)
-        f_train = f_train.reshape(force_train.shape[0], -1)
-        x_test = x_test.reshape(pose_test.shape[0], -1)
-        dx_test = dx_test.reshape(vel_test.shape[0], -1)
-        ddx_test = ddx_test.reshape(acc_test.shape[0], -1)
-        t_test = t_test.reshape(time_test.shape[0], -1)
-        f_test = f_test.reshape(force_test.shape[0], -1)
+        # Collect
+        x_train = np.append(x_train, pose_train)
+        dx_train = np.append(dx_train, vel_train)
+        ddx_train = np.append(ddx_train, acc_train)
+        t_train = np.append(t_train, time_train)
+        f_train = np.append(f_train, force_train)
+        x_test = np.append(x_test, pose_test)
+        dx_test = np.append(dx_test, vel_test)
+        ddx_test = np.append(ddx_test, acc_test)
+        t_test = np.append(t_test, time_test)
+        f_test = np.append(f_test, force_test)
         
-        # Collect into 1 array
-        x_train = np.append(x_train, pose_train, axis=1)
-        dx_train = np.append(dx_train, vel_train, axis=1)
-        ddx_train = np.append(ddx_train, acc_train, axis=1)
-        t_train = np.append(t_train, time_train, axis=1)
-        f_train = np.append(f_train, force_train, axis=1)
-        x_test = np.append(x_test, pose_test, axis=1)
-        dx_test = np.append(dx_test, vel_test, axis=1)
-        ddx_test = np.append(ddx_test, acc_test, axis=1)
-        t_test = np.append(t_test, time_test, axis=1)
-        f_test = np.append(f_test, force_test, axis=1)
-    
     train_dataset, test_dataset = {}, {}    
     train_dataset['x'] = x_train
     train_dataset['dx'] = dx_train
@@ -386,12 +372,12 @@ def train_test_data(
     test_dataset['f'] = f_test
     
     # Add relevant info
-    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
-    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
-    info['qmax'] = train_dataset['x'][:, 0].max()
-    info['qdmax'] = train_dataset['dx'][:, 0].max()
-    info['qddmax'] = train_dataset['ddx'][:, 0].max()
-    info['t'] = train_dataset['t'][:, 0].max()
+    info['train_n_datapoints'] = train_dataset['x'].shape[0]
+    info['test_n_datapoints'] = test_dataset['x'].shape[0]
+    info['qmax'] = train_dataset['x'][:].max()
+    info['qdmax'] = train_dataset['dx'][:].max()
+    info['qddmax'] = train_dataset['ddx'][:].max()
+    info['t'] = train_dataset['t'][:].max()
     info['fmax'] = train_dataset['f'].max()
     
     return train_dataset, test_dataset, info
@@ -407,13 +393,13 @@ def format_to_LNN(old_train_dataset, old_test_dataset, info):
     """
     
     # Position, velocity & total forcing conditions
-    train_x = np.vstack((old_train_dataset['x'].flatten(), old_train_dataset['dx'].flatten())).T
-    train_f = old_train_dataset['f'].flatten()
-    train_dx = np.vstack((old_train_dataset['dx'].flatten(), old_train_dataset['ddx'].flatten())).T
+    train_x = np.vstack((old_train_dataset['x'], old_train_dataset['dx'])).T
+    train_f = old_train_dataset['f']
+    train_dx = np.vstack((old_train_dataset['dx'], old_train_dataset['ddx'])).T
 
-    test_x = np.vstack((old_test_dataset['x'].flatten(), old_test_dataset['dx'].flatten())).T
-    test_f = old_test_dataset['f'].flatten()
-    test_dx = np.vstack((old_test_dataset['dx'].flatten(), old_test_dataset['ddx'].flatten())).T
+    test_x = np.vstack((old_test_dataset['x'], old_test_dataset['dx'])).T
+    test_f = old_test_dataset['f']
+    test_dx = np.vstack((old_test_dataset['dx'], old_test_dataset['ddx'])).T
 
     train_dataset = train_x, train_f, train_dx
     test_dataset = test_x, test_f, test_dx
