@@ -98,8 +98,6 @@ class Duffing_LNN:
         force_der = jax.jacrev(force_func, argnums=1)(t, T)
         Xdot = np.array([xdot, xddot])
         
-        print(f'Force from JAX: {force_der} vs analytical: {cls.F * np.sin(2 * np.pi / T * t + cls.phi) * 2 * np.pi * t / T**2}')
-        
         dgdX = np.array([jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[0, 0, 0, :], jax.jacrev(cls.pred_acc, argnums=0)(X0_arr, force_arr)[-1, -1, -1, :]])
         
         dgdT = np.array([0, force_der])

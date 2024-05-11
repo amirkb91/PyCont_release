@@ -13,23 +13,22 @@ from duffing_lnn import Duffing_LNN
 from runscript import run
 
 
-def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, step=0.1, phase_ratio=0.5, damping=0.05, isLNN=False, predict_acc=None, pred_energy=None, path='./data'):
+def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_amp=1.0, num=10, phase_ratio=0.5, damping=0.05, isLNN=False, predict_acc=None, pred_energy=None, path='./data'):
     """Data generator
 
     Args:
         file_name (str, optional): File with Continuation parameters. Defaults to 'contparameters.json'.
         min_force_amp (float, optional): Defaults to 0.1.
         max_force_amp (float, optional): Defaults to 1.0.
-        step (float, optional): Defaults to 0.1.
+        num (int, optional): Defaults to 10.
         phase_ratio (float, optional): Defaults to 0.5.
         damping (float, optional): Defaults to 0.05.
     """
     # Range only works with integers
     min_force_amp = int(min_force_amp*10)
     max_force_amp = int(max_force_amp*10)
-    step = int(step*10)
     
-    for i in range(min_force_amp, max_force_amp+1, step):
+    for i in range(1, num+1):
         # Open contparameters.json
         with open(file_name, 'r') as file:
             data = json.load(file)
@@ -56,7 +55,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         info = update_data(file=f'FRF{i}', isLNN=isLNN)
         
     # Save results to single file 
-    save_to_file(int(max_force_amp/min_force_amp), path=path)
+    save_to_file(num_files=num, path=path)
     
     return info
 
@@ -202,15 +201,15 @@ def save_to_file(num_files=10, filename='FRF', path='./data'):
     # Save dict to file
     with open(f'{path}/data.pkl', 'wb') as fp:
         pickle.dump(d, fp)
-    
-    
-def train_test_data(
+        
+
+def train_test_data_old(
     save_file='data/data.pkl', 
     split_size=0.20, 
     file_name='contparameters.json', 
     min_force_amp=0.1, 
     max_force_amp=1.0, 
-    step=0.1, 
+    num=10, 
     phase_ratio=0.5, 
     damping=0.05
 ):
@@ -225,7 +224,7 @@ def train_test_data(
         file_name=file_name, 
         min_force_amp=min_force_amp, 
         max_force_amp=max_force_amp, 
-        step=step, 
+        num=num, 
         phase_ratio=phase_ratio, 
         damping=damping
     )
@@ -268,6 +267,111 @@ def train_test_data(
     
     # Create train & test split
     x_train, x_test, dx_train, dx_test, ddx_train, ddx_test, t_train, t_test, f_train, f_test = train_test_split(x, dx, ddx, t, f, test_size=split_size, random_state=42, shuffle=True)
+    
+    train_dataset, test_dataset = {}, {}    
+    train_dataset['x'] = x_train
+    train_dataset['dx'] = dx_train
+    train_dataset['ddx'] = ddx_train
+    train_dataset['t'] = t_train
+    train_dataset['f'] = f_train
+    test_dataset['x'] = x_test
+    test_dataset['dx'] = dx_test
+    test_dataset['ddx'] = ddx_test
+    test_dataset['t'] = t_test
+    test_dataset['f'] = f_test
+    
+    # Add relevant info
+    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
+    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
+    info['qmax'] = train_dataset['x'][:, 0].max()
+    info['qdmax'] = train_dataset['dx'][:, 0].max()
+    info['qddmax'] = train_dataset['ddx'][:, 0].max()
+    info['t'] = train_dataset['t'][:, 0].max()
+    info['fmax'] = train_dataset['f'].max()
+    
+    return train_dataset, test_dataset, info
+    
+    
+def train_test_data(
+    save_file='data/data.pkl', 
+    split_size=0.20, 
+    file_name='contparameters.json', 
+    min_force_amp=0.1, 
+    max_force_amp=1.0, 
+    num=10, 
+    phase_ratio=0.5, 
+    damping=0.05
+):
+    """Create & Split simulation data
+
+    Args:
+        save_file (str, optional): Results. Defaults to 'data.pkl'.
+        split_size (float, optional): Trainig/Test split. Defaults to 20%.
+    """
+    # Generate training data
+    info = generate_data(
+        file_name=file_name, 
+        min_force_amp=min_force_amp, 
+        max_force_amp=max_force_amp, 
+        num=num, 
+        phase_ratio=phase_ratio, 
+        damping=damping
+    )
+    
+    # Read data
+    with open(save_file, 'rb') as fp:
+        data = pickle.load(fp)
+        
+    # Extract each forcing condition
+    all_conds = [(k, v) for k, v in data.items()]
+    
+    # Store ML data
+    x_train = np.array([])
+    dx_train = np.array([])
+    ddx_train = np.array([])
+    t_train = np.array([])
+    f_train = np.array([])
+    x_test = np.array([])
+    dx_test = np.array([])
+    ddx_test = np.array([])
+    t_test = np.array([])
+    f_test = np.array([])
+    
+    # Loop over data
+    for k, v in data.items():
+        pose = data[k]["pose"]
+        vel = data[k]["vel"]
+        acc = data[k]["acc"]
+        time = data[k]["time"]
+        force = data[k]["force"]
+        T = data[k]["T"]
+        
+        # Create train & test split with equal split for each forcing amplitude
+        pose_train, pose_test, vel_train, vel_test, acc_train, acc_test, time_train, time_test, force_train, force_test = train_test_split(pose, vel, acc, time, force, test_size=split_size, random_state=42, shuffle=True)
+        
+        # Reshape array
+        x_train = x_train.reshape(pose_train.shape[0], -1)
+        dx_train = dx_train.reshape(vel_train.shape[0], -1)
+        ddx_train = ddx_train.reshape(acc_train.shape[0], -1)
+        t_train = t_train.reshape(time_train.shape[0], -1)
+        f_train = f_train.reshape(force_train.shape[0], -1)
+        x_test = x_test.reshape(pose_test.shape[0], -1)
+        dx_test = dx_test.reshape(vel_test.shape[0], -1)
+        ddx_test = ddx_test.reshape(acc_test.shape[0], -1)
+        t_test = t_test.reshape(time_test.shape[0], -1)
+        f_test = f_test.reshape(force_test.shape[0], -1)
+        
+        # Collect into 1 array
+        x_train = np.append(x_train, pose_train, axis=1)
+        dx_train = np.append(dx_train, vel_train, axis=1)
+        ddx_train = np.append(ddx_train, acc_train, axis=1)
+        t_train = np.append(t_train, time_train, axis=1)
+        f_train = np.append(f_train, force_train, axis=1)
+        x_test = np.append(x_test, pose_test, axis=1)
+        dx_test = np.append(dx_test, vel_test, axis=1)
+        ddx_test = np.append(ddx_test, acc_test, axis=1)
+        t_test = np.append(t_test, time_test, axis=1)
+        f_test = np.append(f_test, force_test, axis=1)
     
     train_dataset, test_dataset = {}, {}    
     train_dataset['x'] = x_train
