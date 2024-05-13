@@ -25,11 +25,9 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         damping (float, optional): Defaults to 0.05.
     """
     # Range only works with integers
-    min_force_amp = int(min_force_amp*10)
-    max_force_amp = int(max_force_amp*10)
     step = (max_force_amp - min_force_amp)/(num-1)
     
-    for i in range(1, num+1):
+    for i in range(0, num):
         # Open contparameters.json
         with open(file_name, 'r') as file:
             data = json.load(file)
@@ -38,9 +36,9 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
             data['forcing']['tau0'] = damping
         
             # Modify forcing amplitude
-            data['forcing']['amplitude'] = min_force_amp + step
+            data['forcing']['amplitude'] = min_force_amp + i*step
             # Save file
-            data['Logger']['file_name'] = f'FRF{i}'
+            data['Logger']['file_name'] = f'FRF{i+1}'
         
         # Modify contparameters.json
         with open(file_name, 'w') as file:
@@ -53,7 +51,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
         run(model=model, predict_acc=predict_acc, pred_energy=pred_energy)
         
         # Add acceleration & forcing
-        info = update_data(file=f'FRF{i}', isLNN=isLNN)
+        info = update_data(file=f'FRF{i+1}', isLNN=isLNN)
         
     # Save results to single file 
     save_to_file(num_files=num, path=path)
@@ -204,95 +202,6 @@ def save_to_file(num_files=10, filename='FRF', path='./data'):
         pickle.dump(d, fp)
         
 
-def train_test_data_old(
-    save_file='data/data.pkl', 
-    split_size=0.20, 
-    file_name='contparameters.json', 
-    min_force_amp=0.1, 
-    max_force_amp=1.0, 
-    num=10, 
-    phase_ratio=0.5, 
-    damping=0.05
-):
-    """Create & Split simulation data
-
-    Args:
-        save_file (str, optional): Results. Defaults to 'data.pkl'.
-        split_size (float, optional): Trainig/Test split. Defaults to 20%.
-    """
-    # Generate training data
-    info = generate_data(
-        file_name=file_name, 
-        min_force_amp=min_force_amp, 
-        max_force_amp=max_force_amp, 
-        num=num, 
-        phase_ratio=phase_ratio, 
-        damping=damping
-    )
-    
-    # Read data
-    with open(save_file, 'rb') as fp:
-        data = pickle.load(fp)
-    
-    # Store ML data
-    x = np.array([])
-    dx = np.array([])
-    ddx = np.array([])
-    t = np.array([])
-    f = np.array([])
-    period = np.array([])
-    
-    # Loop over data
-    for k, v in data.items():
-        pose = data[k]["pose"]
-        vel = data[k]["vel"]
-        acc = data[k]["acc"]
-        time = data[k]["time"]
-        force = data[k]["force"]
-        T = data[k]["T"]
-         
-        x = np.append(x, pose)
-        dx = np.append(dx, vel)
-        ddx = np.append(ddx, acc)
-        t = np.append(t, time)
-        f = np.append(f, force)
-        period = np.append(period, T)
-        
-    # Reshape array
-    x = x.reshape(pose.shape[0], -1)
-    dx = dx.reshape(vel.shape[0], -1)
-    ddx = ddx.reshape(acc.shape[0], -1)
-    t = t.reshape(time.shape[0], -1)
-    f = f.reshape(force.shape[0], -1)
-    period = period.reshape(-1)
-    
-    # Create train & test split
-    x_train, x_test, dx_train, dx_test, ddx_train, ddx_test, t_train, t_test, f_train, f_test = train_test_split(x, dx, ddx, t, f, test_size=split_size, random_state=42, shuffle=True)
-    
-    train_dataset, test_dataset = {}, {}    
-    train_dataset['x'] = x_train
-    train_dataset['dx'] = dx_train
-    train_dataset['ddx'] = ddx_train
-    train_dataset['t'] = t_train
-    train_dataset['f'] = f_train
-    test_dataset['x'] = x_test
-    test_dataset['dx'] = dx_test
-    test_dataset['ddx'] = ddx_test
-    test_dataset['t'] = t_test
-    test_dataset['f'] = f_test
-    
-    # Add relevant info
-    info['train_n_datapoints'] = train_dataset['x'].shape[0] * train_dataset['x'].shape[-1]
-    info['test_n_datapoints'] = test_dataset['x'].shape[0] * test_dataset['x'].shape[-1]
-    info['qmax'] = train_dataset['x'][:, 0].max()
-    info['qdmax'] = train_dataset['dx'][:, 0].max()
-    info['qddmax'] = train_dataset['ddx'][:, 0].max()
-    info['t'] = train_dataset['t'][:, 0].max()
-    info['fmax'] = train_dataset['f'].max()
-    
-    return train_dataset, test_dataset, info
-    
-    
 def train_test_data(
     save_file='data/data.pkl', 
     split_size=0.20, 
@@ -345,7 +254,7 @@ def train_test_data(
         T = data[k]["T"].flatten()
         
         # Create train & test split with equal split for each forcing amplitude
-        pose_train, pose_test, vel_train, vel_test, acc_train, acc_test, time_train, time_test, force_train, force_test = train_test_split(pose, vel, acc, time, force, test_size=0.2, random_state=42, shuffle=True)
+        pose_train, pose_test, vel_train, vel_test, acc_train, acc_test, time_train, time_test, force_train, force_test = train_test_split(pose, vel, acc, time, force, test_size=split_size, random_state=42, shuffle=True)
         
         # Collect
         x_train = np.append(x_train, pose_train)
