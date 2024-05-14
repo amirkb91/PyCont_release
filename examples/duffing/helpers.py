@@ -26,6 +26,7 @@ def generate_data(file_name='contparameters.json', min_force_amp=0.1, max_force_
     """
     # Range only works with integers
     step = (max_force_amp - min_force_amp)/(num-1)
+    print(f'Creating FRC for forcing amplitudes between {min_force_amp}-{max_force_amp} with step {step}')
     
     for i in range(0, num):
         # Open contparameters.json
@@ -324,7 +325,7 @@ def compare_sols(anal_file='data/FRF1', lnn_file='data_LNN/FRF1'):
         anal_file (str, optional): File with analytical results.
         lnn_file (str, optional): File with LNN results.
     """
-    title = anal_file.split("/")[1]
+    title = anal_file.split("/")[-1]
     
     # Get data
     if not anal_file.endswith(".h5"):
