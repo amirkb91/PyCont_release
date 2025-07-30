@@ -6,10 +6,10 @@ minor = "0"
 patch = "0"
 
 setup(
-    name="PyCont_Release",
+    name="PyCont_lib_release",
     version=major + "." + minor + "." + patch,
     license="",
-    description="core python continuation code - Release",
+    description="python continuation code - Release",
     packages=find_packages(),
     install_requires=[],
 )

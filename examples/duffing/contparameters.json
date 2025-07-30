@@ -10,13 +10,10 @@
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
-    "iterjac": 1,
     "nadapt": 1,
     "s0": 0.005,
     "smin": 1e-05,
     "smax": 0.2,
-    "betacontrol": false,
-    "betamax": 20,
     "ContParMin": 0,
     "ContParMax": 8,
     "Emax": 10000,
@@ -24,24 +21,17 @@
   },
   "shooting": {
     "method": "single",
-    "scaling": false,
     "rel_tol": 1e-08,
     "single": {
       "nperiod": 1,
       "nsteps_per_period": 300
-    },
-    "multiple": {
-      "npartition": 3,
-      "nsteps_per_partition": 70
     }
   },
   "forcing": {
     "amplitude": 0.01,
     "frequency": 0.477464829275686,
-    "phase_ratio": 0,
     "tau0": 0.1,
-    "tau1": 0,
-    "rho_GA": 1.0
+    "tau1": 0
   },
   "first_point": {
     "from_eig": true,

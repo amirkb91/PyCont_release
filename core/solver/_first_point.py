@@ -8,7 +8,6 @@ def first_point(self):
     eig_start = cont_params["first_point"]["from_eig"]
     restart = not eig_start
     forced = cont_params["continuation"]["forced"]
-    shooting_method = cont_params["shooting"]["method"]
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     iter_firstpoint = 0
@@ -53,21 +52,7 @@ def first_point(self):
         self.X0[:N] = 0.0
 
         # Compute Tangent
-        if shooting_method == "single":
-            J[-1, :] = np.zeros(np.shape(J)[1])
-        elif shooting_method == "multiple":
-            # partition solution
-            self.X0, self.pose = self.prob.partitionfunction(
-                self.T0, self.X0, self.pose, cont_params
-            )
-            # size of X0 has changed so reconfigure phase condition matrix
-            phase_condition(self)
-            # override Jacobian with new Jacobian for all partitions, zerofunction is multiple shooting
-            [_, J, _, vel, _, _] = self.prob.zerofunction(
-                1.0, self.T0, self.X0, self.pose, cont_params
-            )
-            J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [np.zeros(np.shape(J)[1])]])
-
+        J[-1, :] = np.zeros(np.shape(J)[1])
         J[-1, -1] = 1
         Z = np.zeros((np.shape(J)[0], 1))
         Z[-1] = 1
@@ -75,32 +60,12 @@ def first_point(self):
         self.tgt0 /= spl.norm(self.tgt0)
 
     elif restart and not forced:
-        if shooting_method == "single":
-            # run sim to get data for storing solution
-            [H, J, self.pose, vel, energy, _] = self.prob.zerofunction_firstpoint(
-                1.0, self.F0, self.T0, self.X0, self.pose0, cont_params
-            )
-            residual = spl.norm(H)
-            J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [np.zeros(np.shape(J)[1])]])
-
-        elif shooting_method == "multiple":
-            if self.pose0.ndim == 1:
-                # if we are restarting from a single shooting solution, we need to partition it
-                self.X0, self.pose0 = self.prob.partitionfunction(
-                    self.T0, self.X0, self.pose0, cont_params
-                )
-                # we also have to recompute tangent regardless of user input
-                cont_params["first_point"]["restart"]["recompute_tangent"] = True
-
-            # phase condition matrix has to be reconfigured for multiple shooting
-            phase_condition(self)
-
-            # run sim to get data for storing solution, zerofunction is multiple shooting
-            [H, J, self.pose, vel, energy, _] = self.prob.zerofunction(
-                1.0, self.T0, self.X0, self.pose0, cont_params
-            )
-            residual = spl.norm(H)
-            J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [np.zeros(np.shape(J)[1])]])
+        # run sim to get data for storing solution
+        [H, J, self.pose, vel, energy, _] = self.prob.zerofunction_firstpoint(
+            1.0, self.F0, self.T0, self.X0, self.pose0, cont_params
+        )
+        residual = spl.norm(H)
+        J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [np.zeros(np.shape(J)[1])]])
 
         if cont_params["first_point"]["restart"]["recompute_tangent"]:
             J[-1, -1] = 1

@@ -29,11 +29,3 @@ def phase_condition(self):
             self.nphase = len(h_idx)
             self.h = np.zeros((self.nphase, twoN))
             self.h[list(range(self.nphase)), h_idx] = 1.0
-        else:
-            # second time phase_condition is called: multiple shooting.
-            # Place phase condition only on first partition
-            h_new = np.zeros((self.nphase, len(self.X0)))
-            row = np.shape(self.h)[0]
-            col = np.shape(self.h)[1]
-            h_new[:row, :col] += self.h
-            self.h = h_new[:, :]

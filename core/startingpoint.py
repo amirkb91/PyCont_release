@@ -72,7 +72,3 @@ class StartingPoint:
             self.tgt0 = restartsol["/Tangent"][:, index]
         except:
             self.tgt0 = None
-
-        # # If different frequency is specified
-        # if self.prob.cont_params["first_point"]["restart"]["fixF"]:
-        #     self.T0 = np.float64(1 / self.prob.cont_params["first_point"]["restart"]["F"])

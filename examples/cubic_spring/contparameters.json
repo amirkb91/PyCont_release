@@ -1,47 +1,37 @@
 {
   "continuation": {
-    "forced": false,
+    "forced": true,
     "method": "psa",
     "tangent": "keller",
-    "continuation_parameter": "frequency",
+    "continuation_parameter": "amplitude",
     "dir": 1,
     "npts": 1500,
     "tol": 0.0001,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
-    "iterjac": 1,
     "nadapt": 2,
     "s0": 0.005,
     "smin": 0.001,
-    "smax": 2.0,
-    "betacontrol": false,
-    "betamax": 20,
-    "ContParMin": 0.15,
-    "ContParMax": 0.23,
+    "smax": 1.0,
+    "ContParMin": 0.1,
+    "ContParMax": 30.0,
     "Emax": 1000000,
     "phase_index_unforced": "allvel"
   },
   "shooting": {
     "method": "single",
-    "scaling": false,
     "rel_tol": 1e-08,
     "single": {
       "nperiod": 1,
       "nsteps_per_period": 300
-    },
-    "multiple": {
-      "npartition": 3,
-      "nsteps_per_partition": 70
     }
   },
   "forcing": {
-    "amplitude": 1.0,
-    "frequency": 0.01,
-    "phase_ratio": 0.5,
+    "amplitude": 0.1,
+    "frequency": 0.5,
     "tau0": 0.05,
-    "tau1": 0.01,
-    "rho_GA": 1.0
+    "tau1": 0.01
   },
   "first_point": {
     "from_eig": true,
