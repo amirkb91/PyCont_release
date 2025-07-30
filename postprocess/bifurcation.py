@@ -5,11 +5,12 @@ import scipy.linalg as spl
 def bifurcation_functions(M):
     # floquet multipliers
     floq = np.sort(spl.eigvals(M))
-    stability = ~np.any(np.abs(floq) > 1) * 1.0
+    stability = 1.0 if np.all(np.abs(floq) <= 1) else 0.0
 
-    # bifurcation test functions
-    phi_fold = np.sign(spl.det(M - np.eye(len(M))))
-    phi_flip = np.sign(spl.det(M + np.eye(len(M))))
+    # Bifurcation test functions
+    phi_fold = np.sign(np.linalg.det(M - np.eye(len(M))))
+    phi_flip = np.sign(np.linalg.det(M + np.eye(len(M))))
+
     n = len(floq)
     phi_NS = 1
     for i in range(n):
@@ -28,6 +29,14 @@ def bifurcation_functions(M):
     # phi_NS = spl.det(M_bi_M - np.eye(len(M_bi_M)))
 
     return floq, stability, phi_fold, phi_flip, phi_NS
+
+
+def get_unstable_eigenvec(M):
+    # return the eigenvector corresponding to the single unstable eigenvalue outside the unit circle
+    eigvals, eigvecs = spl.eig(M)
+    eigvals = np.abs(eigvals)
+    idx = np.argmax(eigvals)
+    return eigvecs[:, idx]
 
 
 def bialternate_same(A):

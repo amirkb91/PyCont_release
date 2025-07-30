@@ -4,7 +4,7 @@ from alive_progress import alive_bar
 import sys, shutil
 import numpy as np
 from scipy.integrate import odeint
-from duffing import Duffing
+from cubic_spring import Cubic_Spring
 from postprocess.bifurcation import bifurcation_functions
 
 """ Run time simulations for all points on solution branch and store """
@@ -48,9 +48,9 @@ acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
 time = np.zeros([n_solpoints, nsteps + 1])
 
 # run sims
-Duffing.forcing_parameters(par)
+Cubic_Spring.forcing_parameters(par)
 if run_bif == "y":
-    Floquet = np.zeros([2, n_solpoints], dtype=np.complex128)
+    Floquet = np.zeros([4, n_solpoints], dtype=np.complex128)
     Stability = np.zeros(n_solpoints)
     Fold = np.zeros(n_solpoints)
     Flip = np.zeros(n_solpoints)
@@ -58,12 +58,18 @@ if run_bif == "y":
 
 with alive_bar(n_solpoints) as bar:
     for i in range(n_solpoints):
-        X = np.array([0.0, vel[0, i]])
-        [_, J, pose_time[:, :, i], vel_time[:, :, i], acc_time[:, :, i], _, _] = Duffing.time_solve(
-            1.0, F[i], T[i], X, pose[0, i], par, fulltime=True
+        # Initial conditions for 2-DOF system: [pos1, pos2, vel1, vel2]
+        X = np.array([0.0, 0.0, vel[0, i], vel[1, i]])
+        [_, J, pose_time_series, vel_time_series, acc_time_series, _, _] = Cubic_Spring.time_solve(
+            1.0, F[i], T[i], X, pose[:, i], par, fulltime=True
         )
+        # Store the time series data
+        pose_time[:, :, i] = pose_time_series.T
+        vel_time[:, :, i] = vel_time_series.T
+        acc_time[:, :, i] = acc_time_series.T
+
         if run_bif == "y":
-            M = J[:, :-1] + np.eye(2)
+            M = J[:, :-1] + np.eye(4)
             bifurcation_out = bifurcation_functions(M)
             Floquet[:, i] = bifurcation_out[0]
             Stability[i] = bifurcation_out[1]

@@ -3,7 +3,7 @@ import numpy as np
 
 def cont_step(self, step, itercorrect, cvg):
     if cvg:
-        if itercorrect == 0:  # or itercorrect == self.prob.cont_params["continuation"]["iteropt"]:
+        if itercorrect == 0 or itercorrect == self.prob.cont_params["continuation"]["iteropt"]:
             step *= np.sqrt(2)
         else:
             step *= self.prob.cont_params["continuation"]["iteropt"] / itercorrect

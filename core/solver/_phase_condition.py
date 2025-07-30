@@ -3,9 +3,12 @@ import numpy as np
 
 def phase_condition(self):
     # parse and sort phase condition indices. range defined in json file is inclusive
+    dofdata = self.prob.doffunction()
+    N = dofdata["ndof_free"]
+    twoN = 2 * N
     if self.prob.cont_params["continuation"]["forced"]:
         self.nphase = 0
-        self.h = np.zeros((self.nphase, len(self.X0)))
+        self.h = np.zeros((self.nphase, twoN))
     else:
         if self.h is None:
             h_idx = []
@@ -20,15 +23,15 @@ def phase_condition(self):
                         h_idx.append(int(idx[i]))
                 h_idx = sorted(set(h_idx))
             elif idx == "allvel":
-                sizeX = len(self.X0)
-                h_idx = list(range(sizeX // 2, sizeX))
+                h_idx = list(range(N, twoN))
 
             # create phase condition matrix h
             self.nphase = len(h_idx)
-            self.h = np.zeros((self.nphase, len(self.X0)))
+            self.h = np.zeros((self.nphase, twoN))
             self.h[list(range(self.nphase)), h_idx] = 1.0
         else:
-            # second time phase_condition is called: multiple shooting
+            # second time phase_condition is called: multiple shooting.
+            # Place phase condition only on first partition
             h_new = np.zeros((self.nphase, len(self.X0)))
             row = np.shape(self.h)[0]
             col = np.shape(self.h)[1]

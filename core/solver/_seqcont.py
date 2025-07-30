@@ -4,46 +4,79 @@ from ._cont_step import cont_step
 
 
 def seqcont(self):
-    forced = self.prob.cont_params["continuation"]["forced"]
+    cont_params = self.prob.cont_params
+    cont_params_cont = cont_params["continuation"]
+    forced = cont_params_cont["forced"]
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     twoN = 2 * N
 
     # first point solution
-    X = self.X0.copy()
-    pose_base = self.pose.copy()
-    omega = self.omega
-    tau = self.tau
+    X = self.X0
+    pose_base = self.pose
+    pose_ref = self.pose_ref  # undeformed pose
+    omega = 1.0
+    tau = self.T0
+    amp = self.F0
+    if cont_params["shooting"]["scaling"]:
+        omega = 1 / self.T0
+        tau = 1.0
+
+    # Set up parameter continuation abstraction
+    # fmt: off
+    cont_parameter = cont_params["continuation"]["continuation_parameter"]
+    if cont_parameter == "frequency":
+        param_current = tau
+        param_name = "frequency"
+        def get_param_value(): return tau
+        def set_param_value(val): nonlocal tau; tau = val
+        def get_period(): return tau
+        def get_amplitude(): return amp
+        def get_cont_param_for_bounds(): return 1 / tau  # actual frequency
+    elif cont_parameter == "amplitude":
+        param_current = amp
+        param_name = "amplitude"
+        def get_param_value(): return amp
+        def set_param_value(val): nonlocal amp; amp = val
+        def get_period(): return tau
+        def get_amplitude(): return amp
+        def get_cont_param_for_bounds(): return amp
+    # fmt: on
 
     # continuation parameters
-    step = self.prob.cont_params["continuation"]["s0"]
-    direction = self.prob.cont_params["continuation"]["dir"]
-    stepsign = -1 * direction  # corrections are always added
+    step = cont_params_cont["s0"]
+    direction = cont_params_cont["dir"] * (-1 if cont_parameter == "frequency" else 1)
 
-    # continuation loop
+    # boolean mask to select inc from X (has no effect on single shooting)
+    inc_mask = np.mod(np.arange(X.size), twoN) < N
+
+    # --- MAIN CONTINUATION LOOP
     itercont = 1
     while True:
-        # increment period
-        tau_pred = tau + step * stepsign
+        # increment continuation parameter
+        param_pred = param_current + step * direction
         X_pred = X.copy()
+        set_param_value(param_pred)
 
         if (
-            omega / tau_pred > self.prob.cont_params["continuation"]["fmax"]
-            or omega / tau_pred < self.prob.cont_params["continuation"]["fmin"]
+            get_cont_param_for_bounds() > cont_params_cont["ContParMax"]
+            or get_cont_param_for_bounds() < cont_params_cont["ContParMin"]
         ):
-            print(f"Frequency {omega / tau_pred:.2e} Hz outside of specified boundary.")
+            print(
+                f"Continuation Parameter {get_cont_param_for_bounds():.2e} outside of specified boundary."
+            )
             break
 
         # correction step
         itercorrect = 0
         while True:
-            if itercorrect % self.prob.cont_params["continuation"]["iterjac"] == 0:
+            if itercorrect % cont_params_cont["iterjac"] == 0:
                 sensitivity = True
             else:
                 sensitivity = False
 
-            [H, Jsim, pose_time, vel_time, energy, cvg_zerof] = self.prob.zerofunction(
-                omega, tau_pred, X_pred, pose_base, self.prob.cont_params, sensitivity=sensitivity
+            [H, Jsim, pose, vel, energy, cvg_zerof] = self.prob.zerofunction(
+                omega, amp, tau, X_pred, pose_base, cont_params, sensitivity=sensitivity
             )
             if not cvg_zerof:
                 cvg_cont = False
@@ -51,17 +84,15 @@ def seqcont(self):
                 break
 
             residual = spl.norm(H)
+            residual = normalise_residual(residual, pose_base, pose_ref, dofdata)
 
             if sensitivity:
                 J = np.block([[Jsim[:, :-1]], [self.h]])
 
-            if (
-                residual < self.prob.cont_params["continuation"]["tol"]
-                and itercorrect >= self.prob.cont_params["continuation"]["itermin"]
-            ):
+            if residual < cont_params_cont["tol"] and itercorrect >= cont_params_cont["itermin"]:
                 cvg_cont = True
                 break
-            elif itercorrect > self.prob.cont_params["continuation"]["itermax"] or residual > 1e10:
+            elif itercorrect > cont_params_cont["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
 
@@ -69,7 +100,8 @@ def seqcont(self):
                 iter=itercont,
                 correct=itercorrect,
                 res=residual,
-                freq=omega / tau_pred,
+                freq=omega / get_period(),
+                amp=get_amplitude(),
                 energy=energy,
                 step=step,
             )
@@ -89,40 +121,68 @@ def seqcont(self):
                 iter=itercont,
                 correct=itercorrect,
                 res=residual,
-                freq=omega / tau_pred,
+                freq=omega / get_period(),
+                amp=get_amplitude(),
                 energy=energy,
                 step=step,
                 beta=0.0,
             )
             self.log.store(
-                sol_pose=pose_time[:, 0],
-                sol_vel=vel_time[:, 0],
-                sol_T=tau_pred / omega,
+                sol_pose=pose,
+                sol_vel=vel,
+                sol_T=get_period() / omega,
+                sol_amp=get_amplitude(),
                 sol_energy=energy,
                 sol_itercorrect=itercorrect,
                 sol_step=step,
             )
 
-            itercont += 1
-            tau = tau_pred
+            param_current = get_param_value()
             X = X_pred.copy()
-            # update pose_base and set inc to zero (slice 0:N on each partition)
-            # pose_time[:, 0] will have included inc from current sol
-            pose_base = pose_time[:, 0].copy()
-            X[np.mod(np.arange(X.size), twoN) < N] = 0.0
+            # update pose_base and set inc to zero, pose will have included inc from current sol
+            pose_base = pose.copy()
+            X[inc_mask] = 0.0
+            itercont += 1
 
-            # if self.prob.cont_params["shooting"]["scaling"]:
+            # if cont_params["shooting"]["scaling"]:
             #     # reset tau to 1.0
             #     omega = omega / tau
             #     tau = 1.0
 
         # adaptive step size for next point
-        if itercont > self.prob.cont_params["continuation"]["nadapt"] or not cvg_cont:
+        if itercont > cont_params_cont["nadapt"] or not cvg_cont:
             step = cont_step(self, step, itercorrect, cvg_cont)
 
-        if itercont > self.prob.cont_params["continuation"]["npts"]:
+        if itercont > cont_params_cont["npts"]:
             print("Maximum number of continuation points reached.")
             break
-        if cvg_cont and energy and energy > self.prob.cont_params["continuation"]["Emax"]:
+        if cvg_cont and energy and energy > cont_params_cont["Emax"]:
             print(f"Energy {energy:.5e} exceeds Emax.")
             break
+        self.log.screenline("-")
+
+
+def normalise_residual(residual, pose_base, pose_ref, dofdata):
+    ndof_all = dofdata["ndof_all"]
+    n_nodes = dofdata["nnodes_all"]
+    config_per_node = dofdata["config_per_node"]
+    dof_per_node = dofdata["dof_per_node"]
+    n_dim = dofdata["n_dim"]
+    SEbeam = dofdata["SEbeam"]
+    inc_from_ref = np.zeros((ndof_all))
+    # in multiple shooting, effectively takes pose_base of first partition only
+    pose_base = pose_base.flatten(order="F")
+
+    if SEbeam:
+        for k in range(n_nodes):
+            f = Frame.relative_frame(
+                n_dim,
+                pose_ref[k * config_per_node : (k + 1) * config_per_node],
+                pose_base[k * config_per_node : (k + 1) * config_per_node],
+            )
+            inc_from_ref[k * dof_per_node : (k + 1) * dof_per_node] = (
+                Frame.get_parameters_from_frame(n_dim, f)
+            )
+    else:
+        inc_from_ref = pose_base[: n_nodes * config_per_node] - pose_ref
+    return residual / spl.norm(inc_from_ref)

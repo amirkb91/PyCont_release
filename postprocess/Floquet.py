@@ -4,7 +4,8 @@ from matplotlib.widgets import Slider
 import sys
 import h5py
 
-normalise_freq = 0.159
+config2plot = 0
+normalise_freq = 1.0
 normalise_amp = 1.0
 
 file = sys.argv[1]
@@ -26,15 +27,24 @@ data = h5py.File(str(file), "r")
 pose_time = data["/Config_Time/POSE"][:]
 T = data["/T"][:] * normalise_freq
 floquet = data["/Bifurcation/Floquet"][:]
-stability = data["/Bifurcation/Stability"][:]
 
 n_solpoints = len(T)
 amp = np.zeros(n_solpoints)
 for i in range(n_solpoints):
-    amp[i] = np.max(np.abs(pose_time[0, :, i])) / normalise_amp
+    amp[i] = np.max(np.abs(pose_time[config2plot, :, i])) / normalise_amp
 a2.plot(1 / T, amp, marker="none", fillstyle="none", color="green")
 
-(floq_points,) = a1.plot(floquet.real[:, 0], floquet.imag[:, 0], "o", markersize=5, color="orange")
+floq_points = []
+for i in range(floquet.shape[0]):
+    (point,) = a1.plot(
+        floquet.real[i, 0],
+        floquet.imag[i, 0],
+        "o",
+        markersize=5,
+        markerfacecolor="green",
+        markeredgecolor="green",
+    )
+    floq_points.append(point)
 (famp_points,) = a2.plot(1 / T[0], amp[0], "o", markersize=5, color="black")
 
 ax = f.add_axes([0.05, 0.15, 0.0225, 0.63])
@@ -51,15 +61,17 @@ slider = Slider(
 
 
 def update(val):
-    sol_no = slider.val
-    floq_points.set_xdata(floquet.real[:, sol_no])
-    floq_points.set_ydata(floquet.imag[:, sol_no])
-    if not stability[sol_no]:
-        floq_points.set_markerfacecolor("red")
-    else:
-        floq_points.set_markerfacecolor("orange")
+    sol_no = int(slider.val)
+    for i, point in enumerate(floq_points):
+        point.set_xdata(floquet.real[i, sol_no])
+        point.set_ydata(floquet.imag[i, sol_no])
+        color = "red" if np.abs(floquet[i, sol_no]) > 1 else "green"
+        point.set_markerfacecolor(color)
+        point.set_markeredgecolor(color)
+
     famp_points.set_xdata(1 / T[sol_no])
     famp_points.set_ydata(amp[sol_no])
+
     f.canvas.draw_idle()
 
 

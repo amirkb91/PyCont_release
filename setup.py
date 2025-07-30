@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 # DEFINE VERSION NUMBER
-major = "1"
+major = "2"
 minor = "0"
 patch = "0"
 
