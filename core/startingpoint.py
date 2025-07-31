@@ -55,18 +55,10 @@ class StartingPoint:
         restartsol_parameters = json.loads(restartsol["/Parameters"][()])
         restartsol_shooting_method = restartsol_parameters["shooting"]["method"]
 
-        # restart solution could be single or multiple shooting
-        if restartsol_shooting_method == "single":
-            v0 = vel[dofdata["free_dof"]]
-            x0 = np.zeros_like(v0)
-            self.X0 = np.concatenate([x0, v0])
-        elif restartsol_shooting_method == "multiple":
-            npartition = restartsol_parameters["shooting"]["multiple"]["npartition"]
-            self.pose0 = np.reshape(self.pose0, (-1, npartition), order="F")
-            vel = np.reshape(vel, (-1, npartition), order="F")
-            v0 = vel[dofdata["free_dof"], :]
-            self.X0 = np.concatenate((np.zeros((N, npartition)), v0))
-            self.X0 = np.reshape(self.X0, (-1), order="F")
+        # restart solution
+        v0 = vel[dofdata["free_dof"]]
+        x0 = np.zeros_like(v0)
+        self.X0 = np.concatenate([x0, v0])
 
         try:
             self.tgt0 = restartsol["/Tangent"][:, index]
