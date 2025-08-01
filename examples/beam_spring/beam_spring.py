@@ -3,12 +3,21 @@ from scipy.integrate import odeint, simps
 import scipy.linalg as spl
 
 
-class Cubic_Spring:
-    # parameters of nonlinear system EoM    MX'' + CX' + KX + fnl = F*sin(2pi/T*t)
+class Beam_Spring:
+    # Nonlinear beam model with tip springs
+
+    # Beam paremeters for 2 mode system
+    k_nl = 4_250_000
+    w_1 = 92
+    w_2 = 250
+    zeta_1 = 0.0
+    zeta_2 = 0.0
+    phi_L = np.array([[-7.38213652279914, 7.36082686754947]])
+
+    # Modal Matrices
     M = np.eye(2)
-    C = np.zeros((2, 2))
-    K = np.array([[2, -1], [-1, 2]])
-    Knl = 0.5
+    C = np.array([[2 * zeta_1 * w_1, 0], [0, 2 * zeta_2 * w_2]])
+    K = np.array([[w_1**2, 0], [0, w_2**2]])
     Minv = spl.inv(M)
 
     # finite element data, 2 dof system
@@ -25,9 +34,9 @@ class Cubic_Spring:
         update parameters if continuation is forced
         """
         if cont_params["continuation"]["forced"]:
-            tau0 = cont_params["forcing"]["tau0"]
-            tau1 = cont_params["forcing"]["tau1"]
-            cls.C = tau0 * cls.M + tau1 * cls.K
+            zeta_1 = 0.03
+            zeta_2 = 0.09
+            cls.C = np.array([[2 * zeta_1 * cls.w_1, 0], [0, 2 * zeta_2 * cls.w_2]])
 
     @classmethod
     def model_ode(cls, t, X, T, F):
@@ -37,7 +46,8 @@ class Cubic_Spring:
         KX = cls.K @ x
         CXdot = cls.C @ xdot
         force = np.array([F * np.sin(2 * np.pi / T * t), 0])
-        fnl = np.array([cls.Knl * x[0] ** 3, 0])
+        phi_x = cls.phi_L @ x  # Physical displacement at nonlinear location
+        fnl = cls.k_nl * cls.phi_L.T @ (phi_x**3)
         Xdot = np.concatenate((xdot, cls.Minv @ (-KX - CXdot - fnl + force)))
         return Xdot
 
@@ -53,7 +63,8 @@ class Cubic_Spring:
         Minv = cls.Minv
         K = cls.K
         C = cls.C
-        knl = cls.Knl
+        k_nl = cls.k_nl
+        phi_L = cls.phi_L
         N = cls.ndof_free
         twoN = 2 * N
 
@@ -70,19 +81,25 @@ class Cubic_Spring:
         KX = K @ x
         CXdot = C @ xdot
         force = np.array([F * np.sin(2 * np.pi / T * t), 0])
-        fnl = np.array([cls.Knl * x[0] ** 3, 0])
+        phi_x = phi_L @ x  # Physical displacement at nonlinear location
+        fnl = k_nl * phi_L.T @ (phi_x**3)
 
         # Force derivatives
         dforce_dT = np.array([F * np.cos(2 * np.pi / T * t) * (-2 * np.pi * t / T**2), 0])
         dforce_dF = np.array([np.sin(2 * np.pi / T * t), 0])
 
         # System dynamics
-        Xdot = np.concatenate((xdot, cls.Minv @ (-KX - CXdot - fnl + force)))
+        Xdot = np.concatenate((xdot, Minv @ (-KX - CXdot - fnl + force)))
+
+        # Jacobian of nonlinear force with respect to modal coordinates
+        # fnl = k_nl * phi_L.T @ (phi_L @ x)^3
+        # dfnl/dx = k_nl * phi_L.T @ diag(3*(phi_L @ x)^2) @ phi_L
+        dfnl_dx = k_nl * phi_L.T @ (3 * phi_x**2 * phi_L)
 
         # Jacobian of system dynamics with respect to state
         dgdX = np.zeros((twoN, twoN))
         dgdX[:N, N:] = np.eye(N)  # dx/dt = xdot
-        dgdX[N:, :N] = -Minv @ (K + np.array([[knl * 3 * x[0] ** 2, 0], [0, 0]]))  # d(xddot)/dx
+        dgdX[N:, :N] = -Minv @ (K + dfnl_dx)  # d(xddot)/dx
         dgdX[N:, N:] = -Minv @ C  # d(xddot)/d(xdot)
 
         # Partial derivatives with respect to parameters
@@ -98,19 +115,21 @@ class Cubic_Spring:
 
     @classmethod
     def eigen_solve(cls):
-        # Continuation variables initial guess from eigenvalues
-        frq, eig = spl.eigh(cls.K, cls.M)
-        frq = np.sqrt(frq) / (2 * np.pi)
-        frq = frq.reshape(-1, 1)
+        """
+        For modal model: frequencies are already known, eigenvectors are identity
+        since we're working in modal coordinates
+        """
+        # Natural frequencies are already defined as class parameters, convert to Hz
+        frq = np.array([[cls.w_1 / (2 * np.pi)], [cls.w_2 / (2 * np.pi)]])
+        eig = np.eye(cls.ndof_free)
 
-        # initial position taken as zero for both dofs
+        # Initial position taken as zero for both modal coordinates
         pose0 = np.zeros(cls.ndof_free)
 
         return eig, frq, pose0
 
     @classmethod
     def time_solve(cls, omega, F, T, X, pose_base, cont_params, sensitivity=True, fulltime=False):
-        nperiod = cont_params["shooting"]["single"]["nperiod"]
         nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
         rel_tol = cont_params["shooting"]["rel_tol"]
         continuation_parameter = cont_params["continuation"]["continuation_parameter"]
@@ -119,7 +138,7 @@ class Cubic_Spring:
 
         # Add position to increment and do time sim to get solution and sensitivities
         X0 = X + np.concatenate((pose_base, np.zeros(N)))
-        t = np.linspace(0, T * nperiod, nsteps * nperiod + 1)
+        t = np.linspace(0, T, nsteps + 1)
         # Initial conditions for the augmented system: X0, eye for monodromy, zeros for time and force sens
         all_ic = np.concatenate((X0, np.eye(twoN).flatten(), np.zeros(twoN), np.zeros(twoN)))
         sol = np.array(
@@ -139,7 +158,7 @@ class Cubic_Spring:
 
         # Jacobian construction depends on continuation parameter
         dHdX0 = M - np.eye(twoN)
-        gX_T = cls.model_ode(T * nperiod, Xsol[-1, :], T, F) * nperiod
+        gX_T = cls.model_ode(T, Xsol[-1, :], T, F)
 
         if continuation_parameter == "frequency":
             # For frequency continuation, include period sensitivity (dH/dT)
@@ -154,11 +173,22 @@ class Cubic_Spring:
         pose = Xsol[0, :N]
         vel = Xsol[0, N:]
 
-        # Energy
+        # Energy calculation
+        # Kinetic energy: 0.5 * xdot^T * M * xdot
+        # Potential energy: 0.5 * x^T * K * x + (1/4) * k_nl * (phi_L @ x)^4
+
+        # The nonlinear force at the tip is a physical force: F_tip = k_nl * (phi_L @ x)**3.
+        # In the equations of motion, this physical force must be projected into modal coordinates
+        # as a vector using phi_L.T, so each mode receives a share of the tip force.
+        # However, the potential energy stored in the nonlinear spring is a scalar, and depends only
+        # on the physical tip displacement (u = phi_L @ x), not on its projection.
+        # Therefore, for energy, we use (1/4) * k_nl * (phi_L @ x)**4, without any projection.
+
+        phi_x_sol = cls.phi_L @ Xsol[:, :N].T
         E0 = (
             0.5 * np.einsum("ij,ij->i", Xsol[:, N:], np.dot(cls.M, Xsol[:, N:].T).T)
             + 0.5 * np.einsum("ij,ij->i", Xsol[:, :N], np.dot(cls.K, Xsol[:, :N].T).T)
-            + 0.25 * cls.Knl * Xsol[:, 0] ** 4
+            + 0.25 * cls.k_nl * phi_x_sol[0, :] ** 4
         )
         force_vec = np.array([F * np.sin(2 * np.pi / T * t), np.zeros_like(t)])
         force_vel = force_vec[0] * Xsol[:, N]
@@ -177,7 +207,8 @@ class Cubic_Spring:
             KX = cls.K @ x_i
             CXdot = cls.C @ xdot_i
             force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
-            fnl_i = np.array([cls.Knl * x_i[0] ** 3, 0])
+            phi_x_i = cls.phi_L @ x_i
+            fnl_i = cls.k_nl * cls.phi_L.T @ (phi_x_i**3)
             acc_time[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
 
         if not fulltime:

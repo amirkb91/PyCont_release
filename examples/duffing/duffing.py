@@ -42,7 +42,7 @@ class Duffing:
     @classmethod
     def model_sens_ode(cls, t, ic, T, F):
         """
-        Augemented ODE of model + sensitivities, to be solved together
+        Augmented ODE of model + sensitivities, to be solved together
         System: Xdot(t) = g(X(t))
         Monodromy: dXdX0dot = dg(X)dX . dXdX0
         Time sens: dXdTdot = dg(X)dX . dXdT + dgdT
