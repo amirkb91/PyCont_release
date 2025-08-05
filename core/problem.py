@@ -34,7 +34,6 @@ class Prob:
                 "betamax": 20,
                 "ContParMin": 20,
                 "ContParMax": 100,
-                "Emax": 1e5,
                 "phase_index_unforced": "allvel",
             },
             "shooting": {
@@ -89,7 +88,6 @@ class Prob:
                 "betamax": {"type": (int, float), "min": 0},
                 "ContParMin": {"type": (int, float)},
                 "ContParMax": {"type": (int, float)},
-                "Emax": {"type": (int, float), "min": 0},
                 "phase_index_unforced": str,
             },
             "shooting": {

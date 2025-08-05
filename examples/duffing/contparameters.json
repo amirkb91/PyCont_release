@@ -16,7 +16,6 @@
     "smax": 0.2,
     "ContParMin": 0,
     "ContParMax": 8,
-    "Emax": 10000,
     "phase_index_unforced": "allvel"
   },
   "shooting": {

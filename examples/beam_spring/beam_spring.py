@@ -7,12 +7,12 @@ class Beam_Spring:
     # Nonlinear beam model with tip springs
 
     # Beam paremeters for 2 mode system
-    k_nl = 4_250_000
-    w_1 = 92
-    w_2 = 250
+    k_nl = 4250000
+    w_1 = 91.734505484821950
+    w_2 = 3.066194429903638e02
     zeta_1 = 0.0
     zeta_2 = 0.0
-    phi_L = np.array([[-7.38213652279914, 7.36082686754947]])
+    phi_L = np.array([[-7.382136522799137, 7.360826867549465]])
 
     # Modal Matrices
     M = np.eye(2)

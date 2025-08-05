@@ -140,9 +140,6 @@ def seqcont(self):
         if itercont > cont_params_cont["npts"]:
             print("Maximum number of continuation points reached.")
             break
-        if cvg_cont and energy and energy > cont_params_cont["Emax"]:
-            print(f"Energy {energy:.5e} exceeds Emax.")
-            break
         self.log.screenline("-")
 
 

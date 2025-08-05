@@ -147,7 +147,7 @@ class Logger:
             self.ax[0].set_xscale("log")
             self.ax[0].set_xlabel("Energy (J)")
             self.ax[0].ticklabel_format(useOffset=False, axis="y")
-            self.ax[0].set_xlim(1e-4, self.prob.cont_params["continuation"]["Emax"])
+            self.ax[0].set_xlim(1e-4, 1e6)
             self.ax[0].set_ylim(
                 self.prob.cont_params["continuation"]["ContParMin"],
                 self.prob.cont_params["continuation"]["ContParMax"],
