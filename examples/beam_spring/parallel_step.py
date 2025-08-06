@@ -6,15 +6,35 @@ This script runs the continuation solver for different types of parameter steps.
 It supports S-curve (frequency step) and Forced Response Curve (amplitude step).
 
 Usage:
-    python frequency_sweep.py [S|F]
+    python parallel_step.py [S|F]
     
-    S: S-curve (frequency step) - modifies "frequency" in JSON
-    F: Forced Response Curve (amplitude step) - modifies "amplitude" in JSON
+    S: S-curve (frequency step) - Computes S-Curves by stepping through a range 
+    of frequencies.
+    F: Forced Response Curve (amplitude step) - Computes Forced Response Curves 
+    by stepping through a range of forcing amplitudes.
+
+    If S is selected, step parameters become frequency steps, and if F is selected, 
+    step parameters become forcing amplitude steps.
+
+    Note, timesim_branch is called automatically for all solution files. Default
+    behaviour for timesim_branch can be changed in run_timesim_branch below.
+    
+    Once completed, the full response surface can be visualised by running:
+    python ../../postprocess/FRC_Scurve_3D.py *.h5
 
 Configuration:
-    Modify param_start, param_end, and param_step in the parameter_step() function.
+    Modify the configuration variables below as needed.
 
 """
+
+# =============================================================================
+num_processes = 6  # Number of parallel processes
+
+# Step parameters (Universal for F or S)
+param_start = 10
+param_end = 25
+param_step = 0.5
+# =============================================================================
 
 import json
 import subprocess
@@ -174,12 +194,6 @@ def parameter_step():
     # Configuration
     config_file = "contparameters.json"
     base_filename = f"{step_type}_step"
-    num_processes = 6  # Number of parallel processes
-
-    # Universal step parameters (modify these for your desired range)
-    param_start = 0.2
-    param_end = 5
-    param_step = 0.2
 
     parameter_list = [
         param_start + i * param_step for i in range(int((param_end - param_start) / param_step) + 1)
