@@ -14,5 +14,7 @@ Results*/
 *.fig
 *.csv
 *.mat
+build/
 
 .lnn_venv/
+.lnn
