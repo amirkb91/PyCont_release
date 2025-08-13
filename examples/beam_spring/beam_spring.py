@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simps
+from scipy.integrate import odeint, simpson
 import scipy.linalg as spl
 
 
@@ -36,13 +36,14 @@ class Beam_Spring:
         if cont_params["continuation"]["forced"]:
             zeta_1 = 0.03
             zeta_2 = 0.09
-            cls.C = np.array([[2 * zeta_1 * cls.w_1, 0], [0, 2 * zeta_2 * cls.w_2]])
+            cls.C = np.array([[2 * zeta_1 * cls.w_1, 0],
+                             [0, 2 * zeta_2 * cls.w_2]])
 
     @classmethod
     def model_ode(cls, t, X, T, F):
         # State equation of the mass spring system. Xdot(t) = g(X(t))
         x = X[: cls.ndof_free]
-        xdot = X[cls.ndof_free :]
+        xdot = X[cls.ndof_free:]
         KX = cls.K @ x
         CXdot = cls.C @ xdot
         force = np.array([F * np.sin(2 * np.pi / T * t), 0])
@@ -71,9 +72,9 @@ class Beam_Spring:
         # Unpack initial conditions: X0, monodromy sensitivities, time sensitivities, force sensitivities
         X0, dXdX0, dXdT, dXdF = (
             ic[:twoN],
-            ic[twoN : twoN + twoN**2],
-            ic[twoN + twoN**2 : twoN + twoN**2 + twoN],
-            ic[twoN + twoN**2 + twoN :],
+            ic[twoN: twoN + twoN**2],
+            ic[twoN + twoN**2: twoN + twoN**2 + twoN],
+            ic[twoN + twoN**2 + twoN:],
         )
 
         x = X0[:N]
@@ -85,7 +86,8 @@ class Beam_Spring:
         fnl = k_nl * phi_L.T @ (phi_x**3)
 
         # Force derivatives
-        dforce_dT = np.array([F * np.cos(2 * np.pi / T * t) * (-2 * np.pi * t / T**2), 0])
+        dforce_dT = np.array(
+            [F * np.cos(2 * np.pi / T * t) * (-2 * np.pi * t / T**2), 0])
         dforce_dF = np.array([np.sin(2 * np.pi / T * t), 0])
 
         # System dynamics
@@ -140,16 +142,18 @@ class Beam_Spring:
         X0 = X + np.concatenate((pose_base, np.zeros(N)))
         t = np.linspace(0, T, nsteps + 1)
         # Initial conditions for the augmented system: X0, eye for monodromy, zeros for time and force sens
-        all_ic = np.concatenate((X0, np.eye(twoN).flatten(), np.zeros(twoN), np.zeros(twoN)))
+        all_ic = np.concatenate(
+            (X0, np.eye(twoN).flatten(), np.zeros(twoN), np.zeros(twoN)))
         sol = np.array(
-            odeint(cls.model_sens_ode, all_ic, t, args=(T, F), rtol=rel_tol, tfirst=True)
+            odeint(cls.model_sens_ode, all_ic, t, args=(
+                T, F), rtol=rel_tol, tfirst=True)
         )
         # unpack solution
         Xsol, M, dXdT, dXdF = (
             sol[:, :twoN],
-            sol[-1, twoN : twoN + twoN**2].reshape(twoN, twoN),
-            sol[-1, twoN + twoN**2 : twoN + twoN**2 + twoN],
-            sol[-1, twoN + twoN**2 + twoN :],
+            sol[-1, twoN: twoN + twoN**2].reshape(twoN, twoN),
+            sol[-1, twoN + twoN**2: twoN + twoN**2 + twoN],
+            sol[-1, twoN + twoN**2 + twoN:],
         )
 
         # periodicity condition
@@ -186,15 +190,19 @@ class Beam_Spring:
 
         phi_x_sol = cls.phi_L @ Xsol[:, :N].T
         E0 = (
-            0.5 * np.einsum("ij,ij->i", Xsol[:, N:], np.dot(cls.M, Xsol[:, N:].T).T)
-            + 0.5 * np.einsum("ij,ij->i", Xsol[:, :N], np.dot(cls.K, Xsol[:, :N].T).T)
+            0.5 * np.einsum("ij,ij->i", Xsol[:, N:],
+                            np.dot(cls.M, Xsol[:, N:].T).T)
+            + 0.5 * np.einsum("ij,ij->i",
+                              Xsol[:, :N], np.dot(cls.K, Xsol[:, :N].T).T)
             + 0.25 * cls.k_nl * phi_x_sol[0, :] ** 4
         )
         force_vec = np.array([F * np.sin(2 * np.pi / T * t), np.zeros_like(t)])
         force_vel = force_vec[0] * Xsol[:, N]
-        damping_vel = np.einsum("ij,ij->i", Xsol[:, N:], (cls.C @ Xsol[:, N:].T).T)
+        damping_vel = np.einsum(
+            "ij,ij->i", Xsol[:, N:], (cls.C @ Xsol[:, N:].T).T)
         E1 = np.array(
-            [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
+            [simpson(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1])
+             for i in range(len(t))]
         )
         E = E0 + E1
         energy = np.max(E)

@@ -1,8 +1,9 @@
 .idea/
 __pycache__/
-.vscode/
-Results*/
 venv/
+.vscode/
+
+Results*/
 *.egg-info/
 *.out
 *.err
@@ -13,3 +14,5 @@ venv/
 *.fig
 *.csv
 *.mat
+
+.lnn_venv/

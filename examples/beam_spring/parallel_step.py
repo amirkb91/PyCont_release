@@ -28,20 +28,19 @@ Configuration:
 """
 
 # =============================================================================
-num_processes = 6  # Number of parallel processes
+from functools import partial
+import multiprocessing as mp
+import os
+import sys
+import subprocess
+import json
+num_processes = 4  # Number of parallel processes
 
 # Step parameters (Universal for F or S)
 param_start = 10
-param_end = 25
-param_step = 0.5
+param_end = 24
+param_step = 0.2
 # =============================================================================
-
-import json
-import subprocess
-import sys
-import os
-import multiprocessing as mp
-from functools import partial
 
 
 def load_config(config_file):
@@ -254,7 +253,8 @@ def parameter_step():
     print("SUMMARY")
     print("=" * 50)
     print(f"Solver: {len(successful_runs)}/{len(parameter_list)} successful")
-    print(f"Timesim: {len(timesim_successful)}/{len(successful_runs)} successful")
+    print(
+        f"Timesim: {len(timesim_successful)}/{len(successful_runs)} successful")
 
     if failed_runs:
         print(f"\nFailed {step_type}s: {[param for param, _ in failed_runs]}")

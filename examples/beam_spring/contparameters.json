@@ -12,7 +12,7 @@
     "itermax": 4,
     "nadapt": 2,
     "s0": 1e-4,
-    "smin": 1e-6,
+    "smin": 1e-8,
     "smax": 5e-2,
     "ContParMin": 0.1,
     "ContParMax": 2,
@@ -28,7 +28,7 @@
   },
   "forcing": {
     "amplitude": 0.5,
-    "frequency": 18
+    "frequency": 16.48
   },
   "first_point": {
     "from_eig": true,
