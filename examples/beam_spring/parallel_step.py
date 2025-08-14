@@ -96,7 +96,7 @@ def run_timesim_branch(h5_filename):
     """Run timesim_branch.py on the generated h5 file"""
     try:
         # Prepare input for timesim_branch.py (n for run_bif and y for store_physical)
-        input_data = "n\ny\n"
+        input_data = "n\nn\n"
         result = subprocess.run(
             [sys.executable, "timesim_branch.py", f"{h5_filename}.h5", "-i"],
             input=input_data,
