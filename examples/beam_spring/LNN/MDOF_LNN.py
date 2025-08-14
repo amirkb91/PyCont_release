@@ -96,17 +96,17 @@ class Split_Base_LNN():
     def gather(self):
         """Initialize M, K & D as separate networks"""
         mnn_init_data = jnp.zeros(
-            self.mnn_settings["input_shape"], dtype=jnp.float64)
+            self.mnn_settings["input_shape"], dtype=jnp.float32)
         mnn_params, mnn_net = self._compile(
             self.mnn_settings, self.mnn_module, rng=self.key, init_data=mnn_init_data)
 
         knn_init_data = jnp.zeros(
-            self.knn_settings["input_shape"], dtype=jnp.float64)
+            self.knn_settings["input_shape"], dtype=jnp.float32)
         knn_params, knn_net = self._compile(
             self.knn_settings, self.knn_module, rng=self.key, init_data=knn_init_data)
 
         dnn_init_data = jnp.zeros(
-            self.dnn_settings["input_shape"], dtype=jnp.float64)
+            self.dnn_settings["input_shape"], dtype=jnp.float32)
         dnn_params, dnn_net = self._compile(
             self.dnn_settings, self.dnn_module, rng=self.key, init_data=dnn_init_data)
 
@@ -263,7 +263,7 @@ class Split_Base_LNN():
             test_epoch_loss = 0
             test_batches_counter = 0
             test_batches = partial(
-                self.DataIterator, batch=test_batch_size, shuffle=True, seed=50)
+                self.DataIterator, batch=test_batch_size, shuffle=shuffle, seed=seed)
 
             for test_batch in test_batches(test_dataset):
                 test_batches_counter += 1
@@ -404,10 +404,10 @@ class Damped_Split_LNN(Split_Base_LNN):
         knn_net = self.knn_net
         dnn_net = self.dnn_net
 
-        qmax = jnp.array([self.info["qmax"]], dtype=jnp.float64)
-        qmin = jnp.array([self.info["qmin"]], dtype=jnp.float64)
-        q_dmax = jnp.array([self.info["qdmax"]], dtype=jnp.float64)
-        q_dmin = jnp.array([self.info["qdmin"]], dtype=jnp.float64)
+        qmax = jnp.array([self.info["qmax"]], dtype=jnp.float32)
+        qmin = jnp.array([self.info["qmin"]], dtype=jnp.float32)
+        q_dmax = jnp.array([self.info["qdmax"]], dtype=jnp.float32)
+        q_dmin = jnp.array([self.info["qdmin"]], dtype=jnp.float32)
 
         def dynamics(mnn_params, knn_params, dnn_params):
             def zeros(x):
@@ -570,7 +570,7 @@ class Damped_Split_LNN(Split_Base_LNN):
         return predict_accel, predict_energy
 
     def evaluate(self, results, n_points=40, file_name="MKD"):
-        _, pred_energy, _ = self._predict(results)
+        _, pred_energy = self._predict(results)
         limq1, limq2, limqd1, limqd2 = self.info["qmin"], self.info["qmax"], self.info["qdmax"], self.info["qdmin"]
 
         qa, qda = jnp.linspace(limq1, limq2, n_points), jnp.linspace(
@@ -582,7 +582,7 @@ class Damped_Split_LNN(Split_Base_LNN):
         L = M - K
 
         fig = plt.figure(figsize=(12, 12), tight_layout=True)
-        fig.suptitle(f"Final Test Loss: {results["best_loss"]:.3e}")
+        fig.suptitle(f"Final Test Loss: {results['best_loss']:.3e}")
 
         # --------------------------------- FUNCTIONS -------------------------------- #
 
@@ -665,38 +665,8 @@ class Damped_Split_LNN(Split_Base_LNN):
 
         # fig.savefig(f"./Split_LNN/{file_name}-MKD.png")
 
-    def evaluate_fourier(self, results, dataset, n=2000, n_seqs=5, n_curves=200, n_modes=7, file_name="FR"):
-        fig, axes = plt.subplots(nrows=n_seqs, ncols=1, figsize=(
-            20, 3*n_seqs), tight_layout=True)
-        pred_accel, _, predict_fourier_coeff = self._predict(results)
-        Q, F, DQ, W = dataset
-
-        for i in range(n_seqs):
-            # Velocities & Accelerations
-            Qt, Ft = Q[i*n:(i+1)*n], F[i*n:(i+1)*n]
-            Qtt = DQ[i*n:(i+1)*n]
-            pred = pred_accel(Qt, Ft)
-
-            # Fourier Regression
-            Wt = W[i:(i+1)]
-            pred_c, pred_G = predict_fourier_coeff(pred, Wt, n_modes)
-            pred_DQ = jnp.tensordot(pred_G, pred_c, axes=1)
-
-            # Calculate RRMSE
-            rrmse_qtt = rrmse_func(Qtt[:, 1], pred_DQ[:, 1])
-
-            # Add figure labels
-            axes[i].plot(pred_DQ[:n_curves],
-                         label="reconstructed acceleration")
-            axes[i].plot(Qtt[:n_curves, 1], label="true acceleration")
-            axes[i].legend()
-            axes[i].set_title(
-                fr"$\omega$={Wt[0]:.1f}Hz | RRMSE q_tt: {rrmse_qtt:.3e}")
-
-        # fig.savefig(f"./Split_LNN/{file_name}-FR.png")
-
     def evaluate_S_curves(self, results, dataset, file_name="S-curves"):
-        pred_accel, _, _ = self._predict(results)
+        pred_accel, _ = self._predict(results)
         Q, F, DQ, W = dataset
 
         # Compute accelerations from LNN
