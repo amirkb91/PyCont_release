@@ -13,7 +13,7 @@ import pickle
 from datetime import datetime
 
 
-class Split_MLP(hk.Module):
+class Physical_MLP(hk.Module):
     """
     Define a 1DOF MLP
     """
@@ -53,7 +53,7 @@ class Split_MLP(hk.Module):
         return self.mlp(x)
 
 
-class Split_Base_LNN():
+class Physical_Base_LNN():
     def __init__(
         self,
         mnn_module,
@@ -346,7 +346,7 @@ class Split_Base_LNN():
         return data
 
 
-class Damped_Split_LNN(Split_Base_LNN):
+class Physical_Damped_LNN(Physical_Base_LNN):
     def __init__(
         self,
         mnn_module,
@@ -386,9 +386,6 @@ class Damped_Split_LNN(Split_Base_LNN):
             # ddL/dqdq_t term in Lagrangian formulation for eom
             GC1 = jax.jacfwd(jax.jacrev(L, 1), 0)(q, q_t)
             GCQ = jnp.tensordot(GC1, q_t, axes=1)
-
-            # t, F, T = jnp.split(f, 3, axis=-1)
-            # S = KQ - CQ - GCQ - F * jnp.sin(2*jnp.pi*t/T)
 
             S = KQ - CQ - GCQ - f
             invM = jnp.linalg.pinv(MQ)
@@ -622,7 +619,7 @@ class Damped_Split_LNN(Split_Base_LNN):
         ax.set_zlabel(r"$\mathcal{D}_{NN}$", fontsize=16, labelpad=3)
         ax.set_title("Damping")
         fig.colorbar(m, ax=ax, shrink=0.3, pad=0.1)
-        # fig.savefig(f"./Split_LNN/{file_name}-LD.png")
+        # fig.savefig(f"./Physical_LNN/{file_name}-LD.png")
 
         # --------------------------------- ENERGIES --------------------------------- #
         fig = plt.figure(figsize=(10, 10), tight_layout=True)
@@ -664,7 +661,7 @@ class Damped_Split_LNN(Split_Base_LNN):
             r"$\frac{\partial}{\partial t}(\frac{\partial \mathcal{L}_{NN}}{\partial q})$", fontsize=16, labelpad=3)
         ax.set_title(f"Mass")
 
-        # fig.savefig(f"./Split_LNN/{file_name}-MKD.png")
+        # fig.savefig(f"./Physical_LNN/{file_name}-MKD.png")
 
     def evaluate_S_curves(self, results, dataset, file_name="S-curves"):
         pred_accel, _ = self._predict(results)
@@ -725,4 +722,4 @@ class Damped_Split_LNN(Split_Base_LNN):
             axs.set_ylabel(r"Response Acceleration $\ddot{X} \ (m/s^2)$")
             axs.legend()
 
-        # fig.savefig(f"./Split_LNN/{file_name}-S_curve.png")
+        # fig.savefig(f"./Physical_LNN/{file_name}-S_curve.png")
