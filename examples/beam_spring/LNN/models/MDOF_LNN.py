@@ -756,10 +756,10 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
             # MSE Calculation
             # Acceleration
             pred_mse = jnp.mean(jnp.square(
-                pred.flatten() - q_d[:, :, -1].flatten()))
+                pred - q_d[:, :, -1]))
             # Known Prior: L(0, 0) = 0 & D(0) = 0
-            ll_mse = jnp.mean(jnp.square(ll.flatten()))
-            ddl_mse = jnp.mean(jnp.square(ddl.flatten()))
+            ll_mse = jnp.mean(jnp.square(ll))
+            ddl_mse = jnp.mean(jnp.square(ddl))
 
             # Losses
             loss = pred_mse + ll_mse + ddl_mse
@@ -805,12 +805,12 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
             q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
             q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
 
-            state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
+            state = jnp.array([q1n, q2n, q1_tn, q2_tn])
 
             M = self.mnn_net.apply(mnn_params, state)
             K = self.knn_net.apply(knn_params, state)
             D = self.dnn_net.apply(
-                dnn_params, jnp.concatenate([q1_tn, q2_tn], axis=-1))
+                dnn_params, jnp.array([q1_tn, q2_tn]))
             result = M, K, D
 
             return result
