@@ -256,13 +256,15 @@ def create_modal_training_data(ml_data, path, split=0.2, seed=42):
             "train_data_shape": train_data.shape,
             "test_data_shape": test_data.shape,
             "n_curves": n_curves,
-            "Shapes": "[Samples, Features: x, dx, ddx, force]",
-            "qmax": x_train.max(),
-            "qmin": x_train.min(),
-            "qdmax": dx_train.max(),
-            "qdmin": dx_train.min(),
-            "qddmax": ddx_train.max(),
-            "qddmin": ddx_train.min(),
+            "Shapes": "[Samples, # of Modes, Features: x, dx, ddx, force]",
+            "q1max": x_train[:, 0].max(),
+            "q1min": x_train[:, 0].min(),
+            "qd1max": dx_train[:, 0].max(),
+            "qd1min": dx_train[:, 0].min(),
+            "q2max": x_train[:, 1].max(),
+            "q2min": x_train[:, 1].min(),
+            "qd2max": dx_train[:, 1].max(),
+            "qd2min": dx_train[:, 1].min(),
         }
 
         # Print Stats

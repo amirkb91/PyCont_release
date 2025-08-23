@@ -647,10 +647,14 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
         knn_net = self.knn_net
         dnn_net = self.dnn_net
 
-        qmax = jnp.array([self.info["qmax"]], dtype=jnp.float32)
-        qmin = jnp.array([self.info["qmin"]], dtype=jnp.float32)
-        q_dmax = jnp.array([self.info["qdmax"]], dtype=jnp.float32)
-        q_dmin = jnp.array([self.info["qdmin"]], dtype=jnp.float32)
+        q1max = jnp.array([self.info["q1max"]], dtype=jnp.float32)
+        q1min = jnp.array([self.info["q1min"]], dtype=jnp.float32)
+        q1_dmax = jnp.array([self.info["qd1max"]], dtype=jnp.float32)
+        q1_dmin = jnp.array([self.info["qd1min"]], dtype=jnp.float32)
+        q2max = jnp.array([self.info["q2max"]], dtype=jnp.float32)
+        q2min = jnp.array([self.info["q2min"]], dtype=jnp.float32)
+        q2_dmax = jnp.array([self.info["qd2max"]], dtype=jnp.float32)
+        q2_dmin = jnp.array([self.info["qd2min"]], dtype=jnp.float32)
 
         def dynamics(mnn_params, knn_params, dnn_params):
             def zeros(x):
@@ -679,10 +683,12 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
                 """LNN forward step with normalized inputs"""
                 # assert qq.shape == (1,)
 
-                qn = 2*(qq - qmin)/(qmax - qmin) - 1
-                q_tn = 2*(qq_t - q_dmin)/(q_dmax - q_dmin) - 1
+                q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
 
-                state = jnp.concatenate([qn, q_tn], axis=-1)
+                state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
                 M = mnn_net.apply(mnn_params, state)
                 K = knn_net.apply(knn_params, state)
 
@@ -692,28 +698,35 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
 
             def mass(qq, qq_t):
                 """MNN forward step with normalized inputs"""
-                qn = 2*(qq - qmin)/(qmax - qmin) - 1
-                q_tn = 2*(qq_t - q_dmin)/(q_dmax - q_dmin) - 1
+                q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
 
-                state = jnp.concatenate([qn, q_tn], axis=-1)
+                state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
                 M = mnn_net.apply(mnn_params, state)
 
                 return M
 
             def stiffness(qq, qq_t):
                 """KNN forward step with normalized inputs"""
-                qn = 2*(qq - qmin)/(qmax - qmin) - 1
-                q_tn = 2*(qq_t - q_dmin)/(q_dmax - q_dmin) - 1
+                q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
 
-                state = jnp.concatenate([qn, q_tn], axis=-1)
+                state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
                 K = knn_net.apply(knn_params, state)
 
                 return K
 
             def dissipation(qq_t):
                 """DNN forward step with normalized inputs"""
-                q_tn = 2*(qq_t - q_dmin)/(q_dmax - q_dmin) - 1
-                D = dnn_net.apply(dnn_params, q_tn)
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
+
+                state = jnp.concatenate([q1_tn, q2_tn], axis=-1)
+                D = dnn_net.apply(dnn_params, state)
 
                 return D
 
@@ -761,12 +774,17 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
         mnn_params = results["best_mnn_params"]
         knn_params = results["best_knn_params"]
         dnn_params = results["best_dnn_params"]
+
         info = results["info"]
 
-        qmax = info["qmax"]
-        qmin = info["qmin"]
-        q_dmax = info["qdmax"]
-        q_dmin = info["qdmin"]
+        q1max = info["q1max"]
+        q1min = info["q1min"]
+        q1_dmax = info["qd1max"]
+        q1_dmin = info["qd1min"]
+        q2max = info["q2max"]
+        q2min = info["q2min"]
+        q2_dmax = info["qd2max"]
+        q2_dmin = info["qd2min"]
 
         mnn_net, knn_net, dnn_net = self.gather()
         eom = self._eom()
@@ -781,15 +799,18 @@ class Physical_Damped_LNN_V2(Physical_Base_LNN):
             return pred
 
         @jax.jit
-        def predict_energy(q, q_t):
-            qn = 2*(q - qmin)/(qmax - qmin) - 1
-            q_tn = 2*(q_t - q_dmin)/(q_dmax - q_dmin) - 1
+        def predict_energy(qq, qq_t):
+            q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+            q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+            q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+            q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
 
-            state = jnp.concatenate([qn, q_tn], axis=-1)
+            state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
 
             M = self.mnn_net.apply(mnn_params, state)
             K = self.knn_net.apply(knn_params, state)
-            D = self.dnn_net.apply(dnn_params, q_tn)
+            D = self.dnn_net.apply(
+                dnn_params, jnp.concatenate([q1_tn, q2_tn], axis=-1))
             result = M, K, D
 
             return result
