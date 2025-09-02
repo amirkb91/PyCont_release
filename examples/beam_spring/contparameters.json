@@ -6,7 +6,7 @@
     "continuation_parameter": "amplitude",
     "dir": 1,
     "npts": 1500,
-    "tol": 0.0001,
+    "tol": 0.001,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
@@ -28,7 +28,7 @@
   },
   "forcing": {
     "amplitude": 0.5,
-    "frequency": 16.48
+    "frequency": 10.0
   },
   "first_point": {
     "from_eig": true,

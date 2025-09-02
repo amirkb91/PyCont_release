@@ -4,7 +4,7 @@ from core.logger import Logger
 from core.solver.continuation import ConX
 from core.startingpoint import StartingPoint
 
-from beam_spring import Beam_Spring
+from beam_spring_lnn import Beam_Spring
 
 # Check command line arguments
 if len(sys.argv) != 2:
@@ -12,23 +12,28 @@ if len(sys.argv) != 2:
 else:
     config_file = sys.argv[1]
 
-# Problem
-prob = Prob()
-prob.read_contparams(config_file)
-prob.add_doffunction(Beam_Spring.get_fe_data)
-prob.add_icfunction(Beam_Spring.eigen_solve)
-prob.add_zerofunction(Beam_Spring.time_solve)
 
-# Initialise forcing parameters if continuation is forced
-Beam_Spring.forcing_parameters(prob.cont_params)
+def run(config_file="contparameters.json", pred_acc=None):
+    Beam_Spring.acc(pred_acc)
 
-# Continuation starting point
-start = StartingPoint(prob)
-start.get_startingpoint()
+    # Problem
+    prob = Prob()
+    prob.read_contparams(config_file)
+    prob.add_doffunction(Beam_Spring.get_fe_data)
+    prob.add_icfunction(Beam_Spring.eigen_solve)
+    prob.add_zerofunction(Beam_Spring.time_solve,
+                          Beam_Spring.time_solve_first_pnt)
 
-# Logger
-log = Logger(prob)
+    # Initialise forcing parameters if continuation is forced
+    Beam_Spring.forcing_parameters(prob.cont_params)
 
-# Solve continuation on problem
-con = ConX(prob, start, log)
-con.solve()
+    # Continuation starting point
+    start = StartingPoint(prob)
+    start.get_startingpoint()
+
+    # Logger
+    log = Logger(prob)
+
+    # Solve continuation on problem
+    con = ConX(prob, start, log)
+    con.solve()
