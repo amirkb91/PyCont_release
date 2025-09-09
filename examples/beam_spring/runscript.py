@@ -21,8 +21,7 @@ def run(config_file="contparameters.json", pred_acc=None):
     prob.read_contparams(config_file)
     prob.add_doffunction(Beam_Spring.get_fe_data)
     prob.add_icfunction(Beam_Spring.eigen_solve)
-    prob.add_zerofunction(Beam_Spring.time_solve,
-                          Beam_Spring.time_solve_first_pnt)
+    prob.add_zerofunction(Beam_Spring.time_solve)
 
     # Initialise forcing parameters if continuation is forced
     Beam_Spring.forcing_parameters(prob.cont_params)

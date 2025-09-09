@@ -6,12 +6,12 @@
     "continuation_parameter": "amplitude",
     "dir": 1,
     "npts": 1500,
-    "tol": 0.001,
+    "tol": 0.0001,
     "itermin": 1,
     "iteropt": 2,
-    "itermax": 4,
+    "itermax": 10,
     "nadapt": 2,
-    "s0": 1e-4,
+    "s0": 1e-2,
     "smin": 1e-8,
     "smax": 5e-2,
     "ContParMin": 0.1,
@@ -32,7 +32,7 @@
   },
   "first_point": {
     "from_eig": true,
-    "itermax": 30,
+    "itermax": 80,
     "eig_start": {
       "NNM": 1,
       "scale": 1e-5
