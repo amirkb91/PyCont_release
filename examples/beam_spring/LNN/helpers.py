@@ -1,6 +1,5 @@
 import h5py
 import pickle
-
 import numpy as np
 import scipy.linalg as spl
 
@@ -343,7 +342,7 @@ def plot_3DS_curves(ml_data, modal=True):
             amp[i] = np.max(np.abs(pose_time[0, :, i])) / 1.0
 
         # Plot the 3D curve (solid lines only, no stability info)
-        ax.plot(freq, F / 1.0, amp, linestyle="-", linewidth=2)
+        ax.plot(freq, F / 1.0, amp, linestyle="-", linewidth=2, label=f"{k}")
 
     # Customize the plot
     ax.grid(True, alpha=0.3)

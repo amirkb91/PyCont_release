@@ -12,5 +12,6 @@ def cont_step(self, step, itercorrect, cvg):
     else:
         step /= 2
         if step < self.prob.cont_params["continuation"]["smin"]:
-            raise Exception("Step size below smin, continuation cannot proceed.")
+            raise Exception(
+                "Step size below smin, continuation cannot proceed.")
     return step

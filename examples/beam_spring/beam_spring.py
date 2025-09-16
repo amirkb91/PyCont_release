@@ -159,9 +159,11 @@ class Beam_Spring:
         # periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
         H = H.reshape(-1, 1)
+        # print(f"H: {H}")
 
         # Jacobian construction depends on continuation parameter
         dHdX0 = M - np.eye(twoN)
+        # print(f"dHdX0: {dHdX0}, {dHdX0.shape}")
         gX_T = cls.model_ode(T, Xsol[-1, :], T, F)
 
         if continuation_parameter == "frequency":
@@ -171,7 +173,10 @@ class Beam_Spring:
         elif continuation_parameter == "amplitude":
             # For amplitude continuation, include force amplitude sensitivity (dH/dF)
             dHdF = dXdF
+            # print(f"dHdF: {dHdF}, {dHdF.shape}")
             J = np.concatenate((dHdX0, dHdF.reshape(-1, 1)), axis=1)
+        # print(f"J: {J.shape}")
+        # print(f"J: {J}")
 
         # solution pose and vel at time 0
         pose = Xsol[0, :N]

@@ -165,7 +165,7 @@ def run_single_parameter(param_value, base_config, base_filename, step_type):
         return (param_value, unique_filename, False, False)
 
 
-def parameter_step():
+def parameter_step(arg="S"):
     """Main function to perform parameter step with parallel processing"""
 
     # Determine step type from command line argument

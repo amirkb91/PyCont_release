@@ -42,7 +42,8 @@ def psacont(self):
     # continuation parameters
     step = cont_params_cont["s0"]
     direction = (
-        cont_params_cont["dir"] * np.sign(tgt[-1]) * (-1 if cont_parameter == "frequency" else 1)
+        cont_params_cont["dir"] * np.sign(tgt[-1]) *
+        (-1 if cont_parameter == "frequency" else 1)
     )
 
     # boolean masks to select inc and vel from X
@@ -75,11 +76,13 @@ def psacont(self):
             )
             if not cvg_zerof:
                 cvg_cont = False
-                print(f"Zero function failed to converge with step = {step:.3e}.")
+                print(
+                    f"Zero function failed to converge with step = {step:.3e}.")
                 break
 
             residual = spl.norm(H)
-            residual = normalise_residual(residual, pose_base, pose_ref, dofdata)
+            # residual = normalise_residual(
+            #     residual, pose_base, pose_ref, dofdata)
 
             # Augmented Jacobian with phase condition and tangent
             J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
@@ -107,7 +110,8 @@ def psacont(self):
             hx = self.h @ X_pred
             Z = np.vstack([H, hx.reshape(-1, 1), np.zeros(1)])
             if not forced:
-                dxt = spl.lstsq(Jcr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
+                dxt = spl.lstsq(Jcr, -Z, cond=None,
+                                check_finite=False, lapack_driver="gelsd")[0]
             elif forced:
                 dxt = spl.solve(Jcr, -Z, check_finite=False)
             param_new = get_param_value() + dxt[-1, 0]
@@ -121,7 +125,8 @@ def psacont(self):
                 # As X[inc_mask] = 0 after convergence, X_pred[inc_mask] is already equal to
                 # the difference between current and previous solutions
                 tgt_next = np.concatenate(
-                    (X_pred[inc_mask], (X_pred - X)[vel_mask], [get_param_value() - param_current])
+                    (X_pred[inc_mask], (X_pred - X)[vel_mask],
+                     [get_param_value() - param_current])
                 )
                 tgt_next /= spl.norm(tgt_next)
                 tgt_inner = np.dot(tgt_next, tgt)
