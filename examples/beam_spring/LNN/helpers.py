@@ -36,7 +36,7 @@ def save_to_file(filename='frequency_step_frequency_', path='results/phys', star
     ml_data = {}
 
     # Loop over all files in directory
-    for i in np.arange(10.0, 24.1, 0.2):
+    for i in np.arange(start, stop+0.1, step):
         # Open new file
         file = f"{path}/{filename}{i:.03f}.h5"
 
@@ -313,6 +313,46 @@ def plot_S_curves(ml_data, modal=True):
         )
         offsets[line] = total_points
         total_points += len(F)
+        line_objects.append(line)
+
+    a.legend(ncols=2, bbox_to_anchor=(1.0, 1.0))
+
+
+def plot_FRC(ml_data, modal=True):
+    f, a = plt.subplots(figsize=(10, 10))
+    a.set(xlabel="F/\u03C9\u2099", ylabel="Normalised Position")
+
+    # Color cycle for different files
+    color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    color_cycle = color_cycle * ((len(ml_data.keys()) // len(color_cycle)) + 1)
+
+    # Plot solutions
+    line_objects = []  # Collect all line objects for cursor interaction
+    offsets = {}  # Store offsets for each segment
+    total_points = 0  # Total number of points plotted
+
+    for data, color in zip(ml_data.items(), color_cycle):
+        k, v = data
+        pose_time = v["pose"]
+        T = v["T"][:]
+        if not modal:
+            pose_time = pose_time[np.newaxis, :, :]
+
+        n_solpoints = len(T)
+        amp = np.zeros(n_solpoints)
+        for i in range(n_solpoints):
+            amp[i] = np.max(np.abs(pose_time[0, :, i])) / 1.0
+
+        (line,) = a.plot(
+            1 / (T * 1.0),
+            amp,
+            marker="none",
+            linestyle="solid",
+            color=color,
+            label=k,
+        )
+        offsets[line] = total_points
+        total_points += len(T)
         line_objects.append(line)
 
     a.legend(ncols=2, bbox_to_anchor=(1.0, 1.0))

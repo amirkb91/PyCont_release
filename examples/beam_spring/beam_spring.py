@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simpson
+from scipy.integrate import odeint, simpson, solve_ivp
 import scipy.linalg as spl
 
 

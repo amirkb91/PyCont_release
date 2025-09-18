@@ -37,9 +37,9 @@ import json
 num_processes = 4  # Number of parallel processes
 
 # Step parameters (Universal for F or S)
-param_start = 10
-param_end = 24
-param_step = 0.2
+param_start = 0.1
+param_end = 2.0
+param_step = 0.1
 # =============================================================================
 
 
@@ -165,7 +165,7 @@ def run_single_parameter(param_value, base_config, base_filename, step_type):
         return (param_value, unique_filename, False, False)
 
 
-def parameter_step(arg="S"):
+def parameter_step():
     """Main function to perform parameter step with parallel processing"""
 
     # Determine step type from command line argument
