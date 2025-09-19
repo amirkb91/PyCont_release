@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simps
+from scipy.integrate import odeint, simpson
 import scipy.linalg as spl
 import matplotlib.pyplot as plt
 

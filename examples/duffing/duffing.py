@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simps
+from scipy.integrate import odeint, simpson
 
 
 class Duffing:
@@ -126,7 +126,7 @@ class Duffing:
         force_vel = F * np.sin(2 * np.pi / T * t) * Xsol[:, 1]
         damping_vel = cls.delta * Xsol[:, 1] ** 2
         E1 = np.array(
-            [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
+            [simpson(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
         )
         E = E0 + E1
         energy = np.max(E)

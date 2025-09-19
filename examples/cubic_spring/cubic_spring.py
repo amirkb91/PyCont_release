@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simps
+from scipy.integrate import odeint, simpson
 import scipy.linalg as spl
 
 
@@ -164,7 +164,7 @@ class Cubic_Spring:
         force_vel = force_vec[0] * Xsol[:, N]
         damping_vel = np.einsum("ij,ij->i", Xsol[:, N:], (cls.C @ Xsol[:, N:].T).T)
         E1 = np.array(
-            [simps(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
+            [simpson(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
         )
         E = E0 + E1
         energy = np.max(E)
