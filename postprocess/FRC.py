@@ -24,7 +24,7 @@ for i, file in enumerate(files):
 
 plt.style.use("ggplot")
 f, a = plt.subplots(figsize=(10, 7))
-a.set(xlabel="F/\u03C9\u2099", ylabel="Normalised Position")
+a.set(xlabel="F/\u03c9\u2099", ylabel="Normalised Position")
 
 # Color cycle for different files
 color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]

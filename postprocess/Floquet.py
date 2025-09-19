@@ -15,7 +15,7 @@ if not file.endswith(".h5"):
 f, (a1, a2) = plt.subplots(1, 2, figsize=(10, 7))
 f.subplots_adjust(left=0.15, right=0.95, wspace=0.3)
 a1.set(xlabel="Real", ylabel="Imaginary")
-a2.set(xlabel="F/\u03C9\u2099", ylabel="Normalised Amplitude")
+a2.set(xlabel="F/\u03c9\u2099", ylabel="Normalised Amplitude")
 a1.axis("square")
 a1.grid("on")
 a2.grid("on")

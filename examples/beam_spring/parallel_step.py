@@ -7,18 +7,18 @@ It supports S-curve (frequency step) and Forced Response Curve (amplitude step).
 
 Usage:
     python parallel_step.py [S|F]
-    
-    S: S-curve (frequency step) - Computes S-Curves by stepping through a range 
+
+    S: S-curve (frequency step) - Computes S-Curves by stepping through a range
     of frequencies.
-    F: Forced Response Curve (amplitude step) - Computes Forced Response Curves 
+    F: Forced Response Curve (amplitude step) - Computes Forced Response Curves
     by stepping through a range of forcing amplitudes.
 
-    If S is selected, step parameters become frequency steps, and if F is selected, 
+    If S is selected, step parameters become frequency steps, and if F is selected,
     step parameters become forcing amplitude steps.
 
     Note, timesim_branch is called automatically for all solution files. Default
     behaviour for timesim_branch can be changed in run_timesim_branch below.
-    
+
     Once completed, the full response surface can be visualised by running:
     python ../../postprocess/FRC_Scurve_3D.py *.h5
 
