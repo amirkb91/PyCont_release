@@ -100,7 +100,7 @@ class Beam_Spring:
 
         # Periodicity
         def periodicity(X0, T, F):
-            t = np.linspace(0, T, nsteps + 1)
+            t = jnp.linspace(0, T, nsteps + 1)
             Xsol = diffeqsolve(term, solver, t0=t[0], t1=t[-1], dt0=t[1]-t[0], y0=X0, args=(
                 T, F), saveat=saveat, stepsize_controller=PIDController(rtol=rel_tol, atol=rel_tol), max_steps=1000000)
             H = Xsol.ys[-1, :] - Xsol.ys[0, :]

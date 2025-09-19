@@ -27,7 +27,7 @@
     }
   },
   "forcing": {
-    "amplitude": 2.0,
+    "amplitude": 0.1,
     "frequency": 12.0
   },
   "first_point": {
@@ -47,6 +47,6 @@
   },
   "Logger": {
     "plot": true,
-    "file_name": "amp_step_2.00"
+    "file_name": "amp_step_0.20"
   }
 }
