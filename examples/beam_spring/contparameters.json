@@ -5,15 +5,15 @@
     "tangent": "keller",
     "continuation_parameter": "frequency",
     "dir": 1,
-    "npts": 150,
-    "tol": 1e-06,
+    "npts": 500,
+    "tol": 0.0001,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
     "nadapt": 2,
     "s0": 0.0001,
     "smin": 1e-08,
-    "smax": 0.005,
+    "smax": 0.01,
     "ContParMin": 10.0,
     "ContParMax": 24.0,
     "phase_index_unforced": "allvel"
@@ -27,8 +27,8 @@
     }
   },
   "forcing": {
-    "amplitude": 2.0,
-    "frequency": 12.0
+    "amplitude": 0.2,
+    "frequency": 10.0
   },
   "first_point": {
     "from_eig": true,
@@ -47,6 +47,6 @@
   },
   "Logger": {
     "plot": true,
-    "file_name": "amp_step_2.00"
+    "file_name": "amp_step_0.20"
   }
 }

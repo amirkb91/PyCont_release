@@ -125,6 +125,7 @@ class Beam_Spring:
             J = np.concatenate((dHdX0, dHdF), axis=1)
         # print(f"J: {J.shape}")
         # print(f"J: {J}")
+        # print(f"Condition number of Jacobian: {np.linalg.cond(J, p=2)}")
 
         # solution pose and vel at time 0
         pose = Xsol[0, :N]
