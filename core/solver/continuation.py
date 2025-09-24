@@ -18,7 +18,7 @@ class ConX:
         self.pose = None
         self.log = log
 
-    def solve(self):
+    def run(self):
         # calculate phase condition matrix h
         phase_condition(self)
         # correct starting solution

@@ -14,21 +14,21 @@ else:
 
 # Problem
 prob = Prob()
-prob.read_contparams(config_file)
+prob.configure_parameters(config_file)
 prob.add_doffunction(Beam_Spring.get_fe_data)
-prob.add_icfunction(Beam_Spring.eigen_solve)
-prob.add_zerofunction(Beam_Spring.time_solve)
+prob.set_starting_function(Beam_Spring.eigen_solve)
+prob.set_zero_function(Beam_Spring.time_solve)
 
 # Initialise forcing parameters if continuation is forced
-Beam_Spring.forcing_parameters(prob.cont_params)
+Beam_Spring.forcing_parameters(prob.parameters)
 
 # Continuation starting point
 start = StartingPoint(prob)
-start.get_startingpoint()
+start.compute_starting_values()
 
 # Logger
 log = Logger(prob)
 
 # Solve continuation on problem
 con = ConX(prob, start, log)
-con.solve()
+con.run()

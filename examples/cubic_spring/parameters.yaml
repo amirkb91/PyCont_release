@@ -1,0 +1,105 @@
+# ---------------------------------------------------------------------------- #
+#                      Continuation Parameters                                 #
+# ---------------------------------------------------------------------------- #
+continuation:
+  # Method for the continuation algorithm.
+  # Options: 'pseudo_arclength' for arclength continuation, 'sequential' for simple parameter stepping.
+  method: pseudo_arclength
+
+  # Tangent predictor strategy for the next solution point.
+  # Options: 'nullspace_previous', 'nullspace_pinned', 'secant'.
+  tangent_predictor: nullspace_previous
+
+  # The primary parameter to vary during continuation.
+  # Options: 'force_amp' (forcing amplitude), 'force_freq' (forcing frequency), 'period'.
+  parameter: period
+
+  # Minimum boundary for the continuation parameter.
+  min_parameter_value: 0.1
+
+  # Maximum boundary for the continuation parameter.
+  max_parameter_value: 30.0
+
+  # Direction for continuation along the solution branch.
+  # Options: 1 for increasing parameter, -1 for decreasing.
+  direction: 1
+
+  # Maximum number of points to compute along the solution branch.
+  num_points: 1500
+
+  # Convergence tolerance for Newton corrections.
+  corrections_tolerance: 0.0001
+
+  # Minimum number of correction iterations per continuation step.
+  min_iterations: 1
+
+  # Optimal number of correction iterations. The step size is adapted to achieve this value.
+  optimal_iterations: 2
+
+  # Maximum number of correction iterations allowed before reducing the step size.
+  max_iterations: 4
+
+  # The step number at which to begin adaptive step size adjustments.
+  adaptive_step_start: 2
+
+  # Initial step size for the continuation algorithm.
+  initial_step_size: 0.005
+
+  # Minimum allowable step size for the continuation algorithm.
+  min_step_size: 0.001
+
+  # Maximum allowable step size for the continuation algorithm.
+  max_step_size: 1.0
+
+  # Index/indices of the velocity degrees of freedom used for the phase condition.
+  # Example: "0" for the first velocity DOF, "0:15" for a range.
+  phase_condition_index: 0:15
+
+# ---------------------------------------------------------------------------- #
+#                            Shooting Parameters                               #
+# ---------------------------------------------------------------------------- #
+shooting:
+  # Relative tolerance for the time integration within the shooting method.
+  integration_tolerance: 1e-08
+
+  # Number of time steps to take within each period during simulation.
+  steps_per_period: 300
+
+# ---------------------------------------------------------------------------- #
+#                           External Forcing Parameters                        #
+# ---------------------------------------------------------------------------- #
+forcing:
+  # Amplitude of the external forcing function.
+  amplitude: 0.1
+
+  # Frequency of the external forcing function.
+  frequency: 0.5
+
+# ---------------------------------------------------------------------------- #
+#                           Starting Point Configuration                       #
+# ---------------------------------------------------------------------------- #
+starting_point:
+  # Method for obtaining the initial solution point for continuation.
+    # Options: 'function' (compute via a function), 'file' (load from a saved solution).
+  source: function
+
+  # Configuration for when 'source' is set to 'file'.
+  file_info:
+    # Name of the file containing the saved solution.
+    file_name: ""
+
+    # Index of the solution point to use from the file.
+    solution_index: 0
+
+    # If true, recompute the tangent vector at the starting point.
+    recompute_tangent: false
+
+# ---------------------------------------------------------------------------- #
+#                                Logger Settings                               #
+# ---------------------------------------------------------------------------- #
+logger:
+  # If true, display a live plot of the solution branch during continuation.
+  enable_live_plot: true
+
+  # Base name for the output file where solution data will be saved.
+  output_file_name: Sol

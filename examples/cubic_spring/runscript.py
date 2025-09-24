@@ -2,27 +2,23 @@ from core.problem import Prob
 from core.logger import Logger
 from core.solver.continuation import ConX
 from core.startingpoint import StartingPoint
-
 from cubic_spring import Cubic_Spring
 
-# Problem
+# Problem object
 prob = Prob()
-prob.read_contparams("contparameters.json")
-prob.add_doffunction(Cubic_Spring.get_fe_data)
-prob.add_icfunction(Cubic_Spring.eigen_solve)
+prob.configure_parameters("parameters.yaml")
+prob.set_starting_function(Cubic_Spring.eigen_solve)
+prob.set_zero_function(Cubic_Spring.time_solve)
 
-prob.add_zerofunction(Cubic_Spring.time_solve)
-
-# Initialise forcing parameters if continuation is forced
-Cubic_Spring.forcing_parameters(prob.cont_params)
-
-# Continuation starting point
+# Starting point for continuation
 start = StartingPoint(prob)
-start.get_startingpoint()
+start.compute_starting_values()
 
-# Logger
+# Logger to log and store solution
 log = Logger(prob)
 
-# Solve continuation on problem
+# Continuation
 con = ConX(prob, start, log)
-con.solve()
+
+# Run continuation on problem
+con.run()

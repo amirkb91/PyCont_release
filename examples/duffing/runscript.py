@@ -7,22 +7,22 @@ from duffing import Duffing
 
 # Problem
 prob = Prob()
-prob.read_contparams("contparameters.json")
+prob.configure_parameters("contparameters.json")
 prob.add_doffunction(Duffing.get_fe_data)
-prob.add_icfunction(Duffing.eigen_solve)
+prob.set_starting_function(Duffing.eigen_solve)
 
-prob.add_zerofunction(Duffing.time_solve)
+prob.set_zero_function(Duffing.time_solve)
 
 # Initialise forcing parameters if continuation is forced
-Duffing.forcing_parameters(prob.cont_params)
+Duffing.forcing_parameters(prob.parameters)
 
 # Continuation starting point
 start = StartingPoint(prob)
-start.get_startingpoint()
+start.compute_starting_values()
 
 # Logger
 log = Logger(prob)
 
 # Solve continuation on problem
 con = ConX(prob, start, log)
-con.solve()
+con.run()
