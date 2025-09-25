@@ -18,7 +18,7 @@ start.set_starting_function(Cubic_Spring.eigen_solve)
 start.get_starting_values(prob.parameters)
 
 # Logger to log and store solution
-log = Logger(prob)
+log = Logger(prob.parameters)
 
 # Continuation
 con = ConX(prob, start, log)

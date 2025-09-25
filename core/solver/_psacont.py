@@ -173,7 +173,7 @@ def psacont(self):
                 sol_pose=pose,
                 sol_vel=vel,
                 sol_T=get_period(),
-                sol_amp=get_amplitude(),
+                sol_F=get_amplitude(),
                 sol_tgt=tgt_next,
                 sol_energy=energy,
                 sol_beta=beta,

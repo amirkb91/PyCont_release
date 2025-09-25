@@ -1,6 +1,6 @@
 import numpy as np
 import h5py
-import json
+import yaml
 import copy
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -8,13 +8,13 @@ from matplotlib import ticker
 
 
 class Logger:
-    def __init__(self, prob):
-        self.prob = prob
+    def __init__(self, parameters):
+        self.parameters = parameters
         self.store_index = 0
         self.linewidth = 14
         self.sol_X = []
         self.sol_T = []
-        self.sol_amp = []
+        self.sol_F = []
         self.sol_tgt = []
         self.sol_pose = []
         self.sol_vel = []
@@ -25,18 +25,14 @@ class Logger:
         self.plot = False
         self.betaplot = False
 
-        if prob.parameters["Logger"]["plot"]:
+        if parameters["logger"]["enable_live_plot"]:
             self.plot = True
             self.fig = plt.figure(figsize=(11, 9))
             self.gs = GridSpec(2, 2)
             self.ax = np.array([])
             self.ln = []
-        if self.prob.parameters["continuation"]["method"] == "psa":
+        if parameters["continuation"]["method"] == "pseudo_arclength":
             self.betaplot = True
-        if self.prob.parameters["shooting"]["method"] == "single":
-            self.npartition = 1
-        elif self.prob.parameters["shooting"]["method"] == "multiple":
-            self.npartition = self.prob.parameters["shooting"]["multiple"]["npartition"]
 
     def store(self, **sol_data):
         self.store_index += 1
@@ -48,8 +44,8 @@ class Logger:
                 self.sol_vel.append(value.flatten(order="F"))
             elif key == "sol_T":
                 self.sol_T.append(value)
-            elif key == "sol_amp":
-                self.sol_amp.append(value)
+            elif key == "sol_F":
+                self.sol_F.append(value)
             elif key == "sol_tgt":
                 self.sol_tgt.append(value)
             elif key == "sol_energy":
@@ -107,31 +103,28 @@ class Logger:
         print(char * 8 * self.linewidth)
 
     def savetodisk(self):
-        savefile = h5py.File(self.prob.parameters["Logger"]["file_name"] + ".h5", "w")
+        savefile = h5py.File(self.parameters["logger"]["output_file_name"] + ".h5", "w")
         savefile["/Config/POSE"] = np.asarray(self.sol_pose).T
         savefile["/Config/VELOCITY"] = np.asarray(self.sol_vel).T
         savefile["/T"] = np.asarray(self.sol_T).T
-        savefile["/Force_Amp"] = np.asarray(self.sol_amp).T
+        savefile["/Force_Amp"] = np.asarray(self.sol_F).T
         savefile["/Tangent"] = np.asarray(self.sol_tgt).T
         savefile["/Energy"] = np.asarray(self.sol_energy).T
         savefile["/beta"] = np.asarray(self.sol_beta).T
         savefile["/itercorrect"] = np.asarray(self.sol_itercorrect).T
         savefile["/step"] = np.asarray(self.sol_step).T
-        savefile["/Parameters"] = json.dumps(self.prob.parameters)
+        savefile["/Parameters"] = yaml.dump(self.parameters)
         savefile.close()
 
     def solplot(self):
         Energy = np.asarray(self.sol_energy)
         T = np.asarray(self.sol_T)
-        Amp = np.asarray(self.sol_amp)
+        Amp = np.asarray(self.sol_F)
         beta = np.asarray(self.sol_beta)
         beta_xaxis = 10
 
         # Determine if we're doing amplitude continuation
-        is_amplitude_continuation = (
-            self.prob.parameters["continuation"]["forced"]
-            and self.prob.parameters["continuation"]["continuation_parameter"] == "amplitude"
-        )
+        is_amplitude_continuation = self.parameters["continuation"]["parameter"] == "force_amp"
 
         if not self.ax.any():
             if self.betaplot:
@@ -149,8 +142,8 @@ class Logger:
             self.ax[0].ticklabel_format(useOffset=False, axis="y")
             self.ax[0].set_xlim(1e-4, 1e6)
             self.ax[0].set_ylim(
-                self.prob.parameters["continuation"]["ContParMin"],
-                self.prob.parameters["continuation"]["ContParMax"],
+                self.parameters["continuation"]["min_parameter_value"],
+                self.parameters["continuation"]["max_parameter_value"],
             )
 
             if is_amplitude_continuation:

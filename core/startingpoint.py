@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 
+
 class StartingPoint:
     def __init__(self):
         self.starting_function = None

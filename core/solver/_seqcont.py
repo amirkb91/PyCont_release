@@ -120,7 +120,7 @@ def seqcont(self):
                 sol_pose=pose,
                 sol_vel=vel,
                 sol_T=get_period(),
-                sol_amp=get_amplitude(),
+                sol_F=get_amplitude(),
                 sol_energy=energy,
                 sol_itercorrect=itercorrect,
                 sol_step=step,
