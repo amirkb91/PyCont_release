@@ -6,10 +6,10 @@ import scipy.linalg as spl
 class Cubic_Spring:
     # parameters of nonlinear system EoM    MX'' + CX' + KX + fnl = F*sin(2pi/T*t)
     M = np.eye(2)
+    Minv = np.eye(2)
     C = np.zeros((2, 2))
     K = np.array([[2, -1], [-1, 2]])
     Knl = 0.5
-    Minv = spl.inv(M)
 
     # finite element data, 2 dof system
     free_dof = np.array([0, 1])
@@ -20,14 +20,25 @@ class Cubic_Spring:
     config_per_node = 1
 
     @classmethod
-    def forcing_parameters(cls, cont_params):
-        """
-        update parameters if continuation is forced
-        """
-        if cont_params["continuation"]["forced"]:
-            tau0 = cont_params["forcing"]["tau0"]
-            tau1 = cont_params["forcing"]["tau1"]
-            cls.C = tau0 * cls.M + tau1 * cls.K
+    def update_model(cls, parameters):
+        # update model definition depending on parameters
+        if "force" in parameters["continuation"]["parameter"]:
+            # forced continuation, update damping matrix
+            cls.C = 0.05 * cls.M + 0.01 * cls.K
+
+    @classmethod
+    def eigen_solve(cls):
+        # Compute eigenvectors and natural frequencies of the model
+        frq, eig = spl.eigh(cls.K, cls.M)
+        frq = np.sqrt(frq) / (2 * np.pi)  # Hz
+
+        # select mode and scaling
+        mode = 1
+        scale = 1e-5
+        X0 = scale * eig[:, mode - 1]
+        T0 = 1 / frq[mode - 1]
+
+        return X0, T0
 
     @classmethod
     def model_ode(cls, t, X, T, F):
@@ -97,23 +108,11 @@ class Cubic_Spring:
         return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten(), dXdFdot.flatten()])
 
     @classmethod
-    def eigen_solve(cls):
-        # Continuation variables initial guess from eigenvalues
-        frq, eig = spl.eigh(cls.K, cls.M)
-        frq = np.sqrt(frq) / (2 * np.pi)
-        frq = frq.reshape(-1, 1)
-
-        # initial position taken as zero for both dofs
-        pose0 = np.zeros(cls.ndof_free)
-
-        return eig, frq, pose0
-
-    @classmethod
-    def time_solve(cls, omega, F, T, X, pose_base, cont_params, sensitivity=True, fulltime=False):
-        nperiod = cont_params["shooting"]["single"]["nperiod"]
-        nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
-        rel_tol = cont_params["shooting"]["rel_tol"]
-        continuation_parameter = cont_params["continuation"]["continuation_parameter"]
+    def time_solve(cls, omega, F, T, X, pose_base, parameters, sensitivity=True, fulltime=False):
+        nperiod = parameters["shooting"]["single"]["nperiod"]
+        nsteps = parameters["shooting"]["single"]["nsteps_per_period"]
+        rel_tol = parameters["shooting"]["rel_tol"]
+        continuation_parameter = parameters["continuation"]["continuation_parameter"]
         N = cls.ndof_free
         twoN = 2 * N
 

@@ -1,18 +1,21 @@
-from core.problem import Prob
+from core.problem import Problem
+from core.startingpoint import StartingPoint
 from core.logger import Logger
 from core.solver.continuation import ConX
-from core.startingpoint import StartingPoint
 from cubic_spring import Cubic_Spring
 
-# Problem object
-prob = Prob()
+# Problem
+prob = Problem()
 prob.configure_parameters("parameters.yaml")
-prob.set_starting_function(Cubic_Spring.eigen_solve)
 prob.set_zero_function(Cubic_Spring.time_solve)
 
+# update model based on parameters
+Cubic_Spring.update_model(prob.parameters)
+
 # Starting point for continuation
-start = StartingPoint(prob)
-start.compute_starting_values()
+start = StartingPoint()
+start.set_starting_function(Cubic_Spring.eigen_solve)
+start.get_starting_values(prob.parameters)
 
 # Logger to log and store solution
 log = Logger(prob)

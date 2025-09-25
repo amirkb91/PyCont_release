@@ -1,5 +1,5 @@
 import sys
-from core.problem import Prob
+from core.problem import Problem
 from core.logger import Logger
 from core.solver.continuation import ConX
 from core.startingpoint import StartingPoint
@@ -13,7 +13,7 @@ else:
     config_file = sys.argv[1]
 
 # Problem
-prob = Prob()
+prob = Problem()
 prob.configure_parameters(config_file)
 prob.add_doffunction(Beam_Spring.get_fe_data)
 prob.set_starting_function(Beam_Spring.eigen_solve)
@@ -24,7 +24,7 @@ Beam_Spring.forcing_parameters(prob.parameters)
 
 # Continuation starting point
 start = StartingPoint(prob)
-start.compute_starting_values()
+start.starting_values_from_function()
 
 # Logger
 log = Logger(prob)

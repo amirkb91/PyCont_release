@@ -6,13 +6,13 @@ def phase_condition(self):
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     twoN = 2 * N
-    if self.prob.cont_params["continuation"]["forced"]:
+    if self.prob.parameters["continuation"]["forced"]:
         self.nphase = 0
         self.h = np.zeros((self.nphase, twoN))
     else:
         if self.h is None:
             h_idx = []
-            idx = self.prob.cont_params["continuation"]["phase_index_unforced"]
+            idx = self.prob.parameters["continuation"]["phase_index_unforced"]
             if idx and idx != "allvel":
                 idx = idx.split(",")
                 for i in range(len(idx)):

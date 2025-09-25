@@ -1,4 +1,4 @@
-from core.problem import Prob
+from core.problem import Problem
 from core.logger import Logger
 from core.solver.continuation import ConX
 from core.startingpoint import StartingPoint
@@ -6,7 +6,7 @@ from core.startingpoint import StartingPoint
 from duffing import Duffing
 
 # Problem
-prob = Prob()
+prob = Problem()
 prob.configure_parameters("contparameters.json")
 prob.add_doffunction(Duffing.get_fe_data)
 prob.set_starting_function(Duffing.eigen_solve)
@@ -18,7 +18,7 @@ Duffing.forcing_parameters(prob.parameters)
 
 # Continuation starting point
 start = StartingPoint(prob)
-start.compute_starting_values()
+start.starting_values_from_function()
 
 # Logger
 log = Logger(prob)

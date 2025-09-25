@@ -23,8 +23,8 @@ class ConX:
         phase_condition(self)
         # correct starting solution
         first_point(self)
-        if self.prob.cont_params["continuation"]["method"] == "seq":
+        if self.prob.parameters["continuation"]["method"] == "seq":
             # sequential continuation
             seqcont(self)
-        elif self.prob.cont_params["continuation"]["method"] == "psa":
+        elif self.prob.parameters["continuation"]["method"] == "psa":
             psacont(self)

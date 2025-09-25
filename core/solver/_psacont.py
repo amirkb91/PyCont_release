@@ -4,10 +4,10 @@ from ._cont_step import cont_step
 
 
 def psacont(self):
-    cont_params = self.prob.cont_params
-    cont_params_cont = cont_params["continuation"]
-    frml = cont_params_cont["tangent"].lower()
-    forced = cont_params_cont["forced"]
+    parameters = self.prob.parameters
+    parameters_cont = parameters["continuation"]
+    frml = parameters_cont["tangent"].lower()
+    forced = parameters_cont["forced"]
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     twoN = 2 * N
@@ -22,7 +22,7 @@ def psacont(self):
 
     # Set up parameter continuation abstraction
     # fmt: off
-    cont_parameter = cont_params["continuation"]["continuation_parameter"]
+    cont_parameter = parameters["continuation"]["continuation_parameter"]
     if cont_parameter == "frequency":
         param_current = tau
         def get_param_value(): return tau
@@ -40,9 +40,9 @@ def psacont(self):
     # fmt: on
 
     # continuation parameters
-    step = cont_params_cont["s0"]
+    step = parameters_cont["s0"]
     direction = (
-        cont_params_cont["dir"] * np.sign(tgt[-1]) * (-1 if cont_parameter == "frequency" else 1)
+        parameters_cont["dir"] * np.sign(tgt[-1]) * (-1 if cont_parameter == "frequency" else 1)
     )
 
     # boolean masks to select inc and vel from X
@@ -58,8 +58,8 @@ def psacont(self):
         set_param_value(param_pred)
 
         if (
-            get_cont_param_for_bounds() > cont_params_cont["ContParMax"]
-            or get_cont_param_for_bounds() < cont_params_cont["ContParMin"]
+            get_cont_param_for_bounds() > parameters_cont["ContParMax"]
+            or get_cont_param_for_bounds() < parameters_cont["ContParMin"]
         ):
             print(
                 f"Continuation Parameter {get_cont_param_for_bounds():.2e} outside of specified boundary."
@@ -71,7 +71,7 @@ def psacont(self):
         while True:
 
             [H, Jsim, pose, vel, energy, cvg_zerof] = self.prob.zerofunction(
-                1.0, amp, tau, X_pred, pose_base, cont_params
+                1.0, amp, tau, X_pred, pose_base, parameters
             )
             if not cvg_zerof:
                 cvg_cont = False
@@ -84,10 +84,10 @@ def psacont(self):
             # Augmented Jacobian with phase condition and tangent
             J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
 
-            if residual < cont_params_cont["tol"] and itercorrect >= cont_params_cont["itermin"]:
+            if residual < parameters_cont["tol"] and itercorrect >= parameters_cont["itermin"]:
                 cvg_cont = True
                 break
-            elif itercorrect > cont_params_cont["itermax"] or residual > 1e10:
+            elif itercorrect > parameters_cont["itermax"] or residual > 1e10:
                 cvg_cont = False
                 break
 
@@ -190,10 +190,10 @@ def psacont(self):
             itercont += 1
 
         # adaptive step size for next point
-        if itercont > cont_params_cont["nadapt"] or not cvg_cont:
+        if itercont > parameters_cont["nadapt"] or not cvg_cont:
             step = cont_step(self, step, itercorrect, cvg_cont)
 
-        if itercont > cont_params_cont["npts"]:
+        if itercont > parameters_cont["npts"]:
             print("Maximum number of continuation points reached.")
             break
         self.log.screenline("-")

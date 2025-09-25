@@ -4,10 +4,10 @@ from ._phase_condition import phase_condition
 
 
 def first_point(self):
-    cont_params = self.prob.cont_params
-    eig_start = cont_params["first_point"]["from_eig"]
+    parameters = self.prob.parameters
+    eig_start = parameters["first_point"]["from_eig"]
     restart = not eig_start
-    forced = cont_params["continuation"]["forced"]
+    forced = parameters["continuation"]["forced"]
     dofdata = self.prob.doffunction()
     N = dofdata["ndof_free"]
     iter_firstpoint = 0
@@ -15,11 +15,11 @@ def first_point(self):
     if eig_start and not forced:
         linearsol = self.X0.copy()
         while True:
-            if iter_firstpoint > cont_params["first_point"]["itermax"]:
+            if iter_firstpoint > parameters["first_point"]["itermax"]:
                 raise Exception("Max number of iterations reached without convergence.")
 
             [H, J, self.pose, vel, energy, cvg_zerof] = self.prob.zerofunction_firstpoint(
-                1.0, self.F0, self.T0, self.X0, self.pose0, cont_params
+                1.0, self.F0, self.T0, self.X0, self.pose0, parameters
             )
             if not cvg_zerof:
                 raise Exception("Zero function failed.")
@@ -36,7 +36,7 @@ def first_point(self):
                 energy=energy,
             )
 
-            if residual < cont_params["continuation"]["tol"] and iter_firstpoint > 0:
+            if residual < parameters["continuation"]["tol"] and iter_firstpoint > 0:
                 break
 
             # correct X0 and T0
@@ -62,12 +62,12 @@ def first_point(self):
     elif restart and not forced:
         # run sim to get data for storing solution
         [H, J, self.pose, vel, energy, _] = self.prob.zerofunction_firstpoint(
-            1.0, self.F0, self.T0, self.X0, self.pose0, cont_params
+            1.0, self.F0, self.T0, self.X0, self.pose0, parameters
         )
         residual = spl.norm(H)
         J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [np.zeros(np.shape(J)[1])]])
 
-        if cont_params["first_point"]["restart"]["recompute_tangent"]:
+        if parameters["first_point"]["restart"]["recompute_tangent"]:
             J[-1, -1] = 1
             Z = np.zeros((np.shape(J)[0], 1))
             Z[-1] = 1
@@ -78,11 +78,11 @@ def first_point(self):
 
     elif forced:
         while True:
-            if iter_firstpoint > cont_params["first_point"]["itermax"]:
+            if iter_firstpoint > parameters["first_point"]["itermax"]:
                 raise Exception("Max number of iterations reached without convergence.")
 
             [H, J, self.pose, vel, energy, cvg_zerof] = self.prob.zerofunction_firstpoint(
-                1.0, self.F0, self.T0, self.X0, self.pose0, cont_params
+                1.0, self.F0, self.T0, self.X0, self.pose0, parameters
             )
             if not cvg_zerof:
                 raise Exception("Zero function failed.")
@@ -98,7 +98,7 @@ def first_point(self):
                 energy=energy,
             )
 
-            if residual < cont_params["continuation"]["tol"] or restart:
+            if residual < parameters["continuation"]["tol"] or restart:
                 break
 
             # correct only X0

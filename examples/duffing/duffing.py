@@ -20,12 +20,12 @@ class Duffing:
     config_per_node = 1
 
     @classmethod
-    def forcing_parameters(cls, cont_params):
+    def forcing_parameters(cls, parameters):
         """
         update parameters if continuation is forced
         """
-        if cont_params["continuation"]["forced"]:
-            cls.delta = cont_params["forcing"]["tau0"]
+        if parameters["continuation"]["forced"]:
+            cls.delta = parameters["forcing"]["tau0"]
 
     @classmethod
     def model_ode(cls, t, X, T, F):
@@ -80,13 +80,13 @@ class Duffing:
         return eig, frq, pose0
 
     @classmethod
-    def time_solve(cls, omega, F, T, X, pose_base, cont_params, sensitivity=True, fulltime=False):
+    def time_solve(cls, omega, F, T, X, pose_base, parameters, sensitivity=True, fulltime=False):
         """
         Time simulation of the model and sensitivity analysis of periodicity function
         """
-        nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
-        rel_tol = cont_params["shooting"]["rel_tol"]
-        continuation_parameter = cont_params["continuation"]["continuation_parameter"]
+        nsteps = parameters["shooting"]["single"]["nsteps_per_period"]
+        rel_tol = parameters["shooting"]["rel_tol"]
+        continuation_parameter = parameters["continuation"]["continuation_parameter"]
 
         # Add position to increment and do time sim to get solution and sensitivities
         X0 = X + np.array([pose_base, 0])

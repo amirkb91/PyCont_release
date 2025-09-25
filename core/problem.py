@@ -2,10 +2,9 @@ import yaml
 from typing import Union, Dict, Any
 
 
-class Prob:
+class Problem:
     def __init__(self):
         self.parameters = None
-        self.starting_function = None
         self.zero_function = None
 
         # Default parameters as instance variables
@@ -99,8 +98,33 @@ class Prob:
         with open(cont_paramfile) as f:
             data = yaml.safe_load(f)
 
+        self._convert_strings_to_floats(data)
+
         self.parameters = self.fill_defaults(data, self.defaults)
         self.validate_parameters()
+
+    def _convert_strings_to_floats(self, data: Union[Dict, list]):
+        """
+        Recursively traverse a dictionary or list and convert string values to floats.
+        """
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, str):
+                    try:
+                        data[key] = float(value)
+                    except (ValueError, TypeError):
+                        pass  # Ignore conversion errors
+                elif isinstance(value, (dict, list)):
+                    self._convert_strings_to_floats(value)
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, str):
+                    try:
+                        data[i] = float(item)
+                    except (ValueError, TypeError):
+                        pass  # Ignore conversion errors
+                elif isinstance(item, (dict, list)):
+                    self._convert_strings_to_floats(item)
 
     def validate_parameters(self):
         """
@@ -218,9 +242,6 @@ class Prob:
             elif isinstance(value, dict) and isinstance(result[key], dict):
                 result[key] = self.fill_defaults(result[key], value)
         return result
-
-    def set_starting_function(self, fxn):
-        self.starting_function = fxn
 
     def set_zero_function(self, fxn):
         self.zero_function = fxn

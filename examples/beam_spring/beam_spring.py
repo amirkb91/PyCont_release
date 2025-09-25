@@ -29,11 +29,11 @@ class Beam_Spring:
     config_per_node = 1
 
     @classmethod
-    def forcing_parameters(cls, cont_params):
+    def forcing_parameters(cls, parameters):
         """
         update parameters if continuation is forced
         """
-        if cont_params["continuation"]["forced"]:
+        if parameters["continuation"]["forced"]:
             zeta_1 = 0.03
             zeta_2 = 0.09
             cls.C = np.array([[2 * zeta_1 * cls.w_1, 0], [0, 2 * zeta_2 * cls.w_2]])
@@ -129,10 +129,10 @@ class Beam_Spring:
         return eig, frq, pose0
 
     @classmethod
-    def time_solve(cls, omega, F, T, X, pose_base, cont_params, sensitivity=True, fulltime=False):
-        nsteps = cont_params["shooting"]["single"]["nsteps_per_period"]
-        rel_tol = cont_params["shooting"]["rel_tol"]
-        continuation_parameter = cont_params["continuation"]["continuation_parameter"]
+    def time_solve(cls, omega, F, T, X, pose_base, parameters, sensitivity=True, fulltime=False):
+        nsteps = parameters["shooting"]["single"]["nsteps_per_period"]
+        rel_tol = parameters["shooting"]["rel_tol"]
+        continuation_parameter = parameters["continuation"]["continuation_parameter"]
         N = cls.ndof_free
         twoN = 2 * N
 

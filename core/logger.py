@@ -25,18 +25,18 @@ class Logger:
         self.plot = False
         self.betaplot = False
 
-        if prob.cont_params["Logger"]["plot"]:
+        if prob.parameters["Logger"]["plot"]:
             self.plot = True
             self.fig = plt.figure(figsize=(11, 9))
             self.gs = GridSpec(2, 2)
             self.ax = np.array([])
             self.ln = []
-        if self.prob.cont_params["continuation"]["method"] == "psa":
+        if self.prob.parameters["continuation"]["method"] == "psa":
             self.betaplot = True
-        if self.prob.cont_params["shooting"]["method"] == "single":
+        if self.prob.parameters["shooting"]["method"] == "single":
             self.npartition = 1
-        elif self.prob.cont_params["shooting"]["method"] == "multiple":
-            self.npartition = self.prob.cont_params["shooting"]["multiple"]["npartition"]
+        elif self.prob.parameters["shooting"]["method"] == "multiple":
+            self.npartition = self.prob.parameters["shooting"]["multiple"]["npartition"]
 
     def store(self, **sol_data):
         self.store_index += 1
@@ -107,7 +107,7 @@ class Logger:
         print(char * 8 * self.linewidth)
 
     def savetodisk(self):
-        savefile = h5py.File(self.prob.cont_params["Logger"]["file_name"] + ".h5", "w")
+        savefile = h5py.File(self.prob.parameters["Logger"]["file_name"] + ".h5", "w")
         savefile["/Config/POSE"] = np.asarray(self.sol_pose).T
         savefile["/Config/VELOCITY"] = np.asarray(self.sol_vel).T
         savefile["/T"] = np.asarray(self.sol_T).T
@@ -117,7 +117,7 @@ class Logger:
         savefile["/beta"] = np.asarray(self.sol_beta).T
         savefile["/itercorrect"] = np.asarray(self.sol_itercorrect).T
         savefile["/step"] = np.asarray(self.sol_step).T
-        savefile["/Parameters"] = json.dumps(self.prob.cont_params)
+        savefile["/Parameters"] = json.dumps(self.prob.parameters)
         savefile.close()
 
     def solplot(self):
@@ -129,8 +129,8 @@ class Logger:
 
         # Determine if we're doing amplitude continuation
         is_amplitude_continuation = (
-            self.prob.cont_params["continuation"]["forced"]
-            and self.prob.cont_params["continuation"]["continuation_parameter"] == "amplitude"
+            self.prob.parameters["continuation"]["forced"]
+            and self.prob.parameters["continuation"]["continuation_parameter"] == "amplitude"
         )
 
         if not self.ax.any():
@@ -149,8 +149,8 @@ class Logger:
             self.ax[0].ticklabel_format(useOffset=False, axis="y")
             self.ax[0].set_xlim(1e-4, 1e6)
             self.ax[0].set_ylim(
-                self.prob.cont_params["continuation"]["ContParMin"],
-                self.prob.cont_params["continuation"]["ContParMax"],
+                self.prob.parameters["continuation"]["ContParMin"],
+                self.prob.parameters["continuation"]["ContParMax"],
             )
 
             if is_amplitude_continuation:
