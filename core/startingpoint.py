@@ -3,7 +3,8 @@ import numpy as np
 
 
 class StartingPoint:
-    def __init__(self):
+    def __init__(self, parameters):
+        self.parameters = parameters
         self.starting_function = None
         self.X0 = None
         self.T0 = None
@@ -13,24 +14,26 @@ class StartingPoint:
     def set_starting_function(self, fxn):
         self.starting_function = fxn
 
-    def get_starting_values(self, parameters):
-        if parameters["starting_point"]["source"] == "function":
-            self.starting_values_from_function(parameters)
-        elif parameters["starting_point"]["source"] == "file":
-            self.starting_values_from_file(parameters)
+    def get_starting_values(self):
+        if self.parameters["starting_point"]["source"] == "function":
+            self.starting_values_from_function()
+        elif self.parameters["starting_point"]["source"] == "file":
+            self.starting_values_from_file()
 
-    def starting_values_from_function(self, parameters):
+    def starting_values_from_function(self):
         self.X0, self.T0 = self.starting_function()
 
-        if "force" in parameters["continuation"]["parameter"]:
-            self.T0 = 1 / parameters["forcing"]["frequency"]
-            self.F0 = parameters["forcing"]["amplitude"]
+        if "force" in self.parameters["continuation"]["parameter"]:
+            self.T0 = 1 / self.parameters["forcing"]["frequency"]
+            self.F0 = self.parameters["forcing"]["amplitude"]
         else:
             self.F0 = np.float64(0.0)
 
-    def starting_values_from_file(self, parameters):
-        file_data = h5py.File(parameters["starting_point"]["file_info"]["file_name"] + ".h5", "r+")
-        index = parameters["starting_point"]["file_info"]["solution_index"]
+    def starting_values_from_file(self):
+        file_data = h5py.File(
+            self.parameters["starting_point"]["file_info"]["file_name"] + ".h5", "r+"
+        )
+        index = self.parameters["starting_point"]["file_info"]["solution_index"]
 
         self.T0 = file_data["/T"][index]
         x0 = file_data["/Config/INC"][:, index]

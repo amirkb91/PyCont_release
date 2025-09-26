@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg as spl
-from ._phase_condition import phase_condition
+from ._phase_condition import add_phase_condition
 
 
 def first_point(self):

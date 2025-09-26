@@ -13,9 +13,9 @@ prob.set_zero_function(Cubic_Spring.time_solve)
 Cubic_Spring.update_model(prob.parameters)
 
 # Starting point for continuation
-start = StartingPoint()
+start = StartingPoint(prob.parameters)
 start.set_starting_function(Cubic_Spring.eigen_solve)
-start.get_starting_values(prob.parameters)
+start.get_starting_values()
 
 # Logger to log and store solution
 log = Logger(prob.parameters)

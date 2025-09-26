@@ -25,7 +25,7 @@ class Problem:
                 "initial_step_size": 0.005,
                 "min_step_size": 0.001,
                 "max_step_size": 1.0,
-                "phase_condition_index": "0:15",
+                "phase_condition_index": "",
             },
             "shooting": {
                 "integration_tolerance": 1e-08,

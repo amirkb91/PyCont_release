@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------- #
 continuation:
   # Method for the continuation algorithm.
-  # Options: 'pseudo_arclength' for arclength continuation, 'sequential' for simple parameter stepping.
+  # Options: 'pseudo_arclength', 'sequential'.
   method: pseudo_arclength
 
   # Tangent predictor strategy for the next solution point.
@@ -51,9 +51,11 @@ continuation:
   # Maximum allowable step size for the continuation algorithm.
   max_step_size: 1.0
 
-  # Index/indices of the velocity degrees of freedom used for the phase condition.
-  # Example: "0" for the first velocity DOF, "0:15" for a range.
-  phase_condition_index: 0:15
+  # Index/indices of the velocity degrees of freedom used for the phase condition (UNFORCED).
+  # Example: "0" for the first velocity DOF, "0:10" for a range (inclusive).
+  # Values may be split with ",". Example: 0:10,20:25
+  # Setting phase_condition_index: "all" will constrain all velocity DoFs
+  phase_condition_index: 0,1
 
 # ---------------------------------------------------------------------------- #
 #                            Shooting Parameters                               #
@@ -80,7 +82,7 @@ forcing:
 # ---------------------------------------------------------------------------- #
 starting_point:
   # Method for obtaining the initial solution point for continuation.
-    # Options: 'function' (compute via a function), 'file' (load from a saved solution).
+  # Options: 'function' (compute via a function), 'file' (load from a saved solution).
   source: function
 
   # Configuration for when 'source' is set to 'file'.

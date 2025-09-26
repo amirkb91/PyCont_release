@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg as spl
 from ._cont_step import cont_step
+from ._phase_condition import add_phase_condition
 
 
 def psacont(self):
