@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.linalg as spl
-from ._cont_step import cont_step
 
 
 def psacont(self):
@@ -79,7 +78,7 @@ def psacont(self):
                 break
 
             residual = spl.norm(H)
-            residual = normalise_residual(residual, pose_base, pose_ref, dofdata)
+            # residual = normalise_residual(residual, pose_base, pose_ref, dofdata)
 
             # Augmented Jacobian with phase condition and tangent
             J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
@@ -191,7 +190,7 @@ def psacont(self):
 
         # adaptive step size for next point
         if itercont > parameters_cont["nadapt"] or not cvg_cont:
-            step = cont_step(self, step, itercorrect, cvg_cont)
+            step = self.adapt_stepsize(self, step, itercorrect, cvg_cont)
 
         if itercont > parameters_cont["npts"]:
             print("Maximum number of continuation points reached.")
@@ -199,11 +198,11 @@ def psacont(self):
         self.log.screenline("-")
 
 
-def normalise_residual(residual, pose_base, pose_ref, dofdata):
-    ndof_all = dofdata["ndof_all"]
-    n_nodes = dofdata["nnodes_all"]
-    config_per_node = dofdata["config_per_node"]
-    inc_from_ref = np.zeros((ndof_all))
-    pose_base = pose_base.flatten(order="F")
-    inc_from_ref = pose_base[: n_nodes * config_per_node] - pose_ref
-    return residual / spl.norm(inc_from_ref)
+# def normalise_residual(residual, pose_base, pose_ref, dofdata):
+#     ndof_all = dofdata["ndof_all"]
+#     n_nodes = dofdata["nnodes_all"]
+#     config_per_node = dofdata["config_per_node"]
+#     inc_from_ref = np.zeros((ndof_all))
+#     pose_base = pose_base.flatten(order="F")
+#     inc_from_ref = pose_base[: n_nodes * config_per_node] - pose_ref
+#     return residual / spl.norm(inc_from_ref)

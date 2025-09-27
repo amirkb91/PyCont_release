@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def cont_step(self, step, itercorrect, cvg):
+def adapt_stepsize(self, step, itercorrect, cvg):
     if cvg:
         if itercorrect == 0 or itercorrect == self.prob.parameters["continuation"]["iteropt"]:
             step *= np.sqrt(2)

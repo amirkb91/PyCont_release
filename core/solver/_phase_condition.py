@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def _add_phase_condition(self, J):
+def add_phase_condition(self, J):
     """
     Augments the Jacobian with phase condition constraints.
 
