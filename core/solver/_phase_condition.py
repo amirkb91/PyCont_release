@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def add_phase_condition(self, J):
+def _add_phase_condition(self, J):
     """
     Augments the Jacobian with phase condition constraints.
 
@@ -18,8 +18,8 @@ def add_phase_condition(self, J):
     n_dof = J.shape[0]  # Number of system degrees of freedom
     n_cols = J.shape[1]
 
-    # The number of velocity DOFs is assumed to be half of the total DOFs.
-    n_vel = n_dof // 2
+    # The number of velocity DOFs is half of the total DOFs.
+    n_dof_2 = n_dof // 2
 
     constraint_indices = []
     idx_setting = self.prob.parameters["continuation"]["phase_condition_index"]
@@ -30,7 +30,7 @@ def add_phase_condition(self, J):
     if idx_setting == "all":
         # Constrain all velocity degrees of freedom.
         # This assumes velocities are the second half of the state vector.
-        constraint_indices = list(range(n_vel))
+        constraint_indices = list(range(n_dof_2))
     else:
         # Parse comma-separated indices and colon-separated ranges (e.g., "0:2,4").
         parts = idx_setting.split(",")
@@ -44,8 +44,7 @@ def add_phase_condition(self, J):
         constraint_indices = sorted(set(constraint_indices))
 
     num_constraints = len(constraint_indices)
-    if num_constraints == 0:
-        return J  # Return original Jacobian if no constraints are applied
+    self.num_phase_constraints = num_constraints
 
     # Create the augmented Jacobian
     J_aug = np.zeros((n_dof + num_constraints, n_cols))
@@ -53,6 +52,6 @@ def add_phase_condition(self, J):
 
     # Add phase condition rows. Each row corresponds to fixing one velocity DOF.
     for i, v_idx in enumerate(constraint_indices):
-        J_aug[n_dof + i, v_idx + n_vel] = 1.0
+        J_aug[n_dof + i, v_idx + n_dof_2] = 1.0
 
     return J_aug

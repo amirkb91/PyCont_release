@@ -34,9 +34,12 @@ class Cubic_Spring:
 
         # select mode and scaling
         mode = 1
-        scale = 1e-5
+        scale = 1e-2
         X0 = scale * eig[:, mode - 1]
         T0 = 1 / frq[mode - 1]
+
+        # add zeros for velocity degrees of freedom
+        X0 = np.append(X0, np.zeros_like(X0))
 
         return X0, T0
 
@@ -108,60 +111,55 @@ class Cubic_Spring:
         return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten(), dXdFdot.flatten()])
 
     @classmethod
-    def time_solve(cls, omega, F, T, X, pose_base, parameters, sensitivity=True, fulltime=False):
-        nperiod = parameters["shooting"]["single"]["nperiod"]
-        nsteps = parameters["shooting"]["single"]["nsteps_per_period"]
-        rel_tol = parameters["shooting"]["rel_tol"]
-        continuation_parameter = parameters["continuation"]["continuation_parameter"]
-        N = cls.ndof_free
-        twoN = 2 * N
+    def time_solve(cls, F, T, X, parameters, fulltime=False):
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+        continuation_parameter = parameters["continuation"]["parameter"]
 
-        # Add position to increment and do time sim to get solution and sensitivities
-        X0 = X + np.concatenate((pose_base, np.zeros(N)))
-        t = np.linspace(0, T * nperiod, nsteps * nperiod + 1)
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation
+        t = np.linspace(0, T, nsteps + 1)
         # Initial conditions for the augmented system: X0, eye for monodromy, zeros for time and force sens
-        all_ic = np.concatenate((X0, np.eye(twoN).flatten(), np.zeros(twoN), np.zeros(twoN)))
+        all_ic = np.concatenate((X, np.eye(n_dof).flatten(), np.zeros(n_dof), np.zeros(n_dof)))
         sol = np.array(
             odeint(cls.model_sens_ode, all_ic, t, args=(T, F), rtol=rel_tol, tfirst=True)
         )
         # unpack solution
         Xsol, M, dXdT, dXdF = (
-            sol[:, :twoN],
-            sol[-1, twoN : twoN + twoN**2].reshape(twoN, twoN),
-            sol[-1, twoN + twoN**2 : twoN + twoN**2 + twoN],
-            sol[-1, twoN + twoN**2 + twoN :],
+            sol[:, :n_dof],
+            sol[-1, n_dof : n_dof + n_dof**2].reshape(n_dof, n_dof),
+            sol[-1, n_dof + n_dof**2 : n_dof + n_dof**2 + n_dof],
+            sol[-1, n_dof + n_dof**2 + n_dof :],
         )
 
         # periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
-        H = H.reshape(-1, 1)
 
-        # Jacobian construction depends on continuation parameter
-        dHdX0 = M - np.eye(twoN)
-        gX_T = cls.model_ode(T * nperiod, Xsol[-1, :], T, F) * nperiod
+        # Jacobian construction
+        dHdX0 = M - np.eye(n_dof)
+        gX_T = cls.model_ode(T, Xsol[-1, :], T, F)
 
-        if continuation_parameter == "frequency":
+        if continuation_parameter == "force_freq" or F == 0:
             # For frequency continuation, include period sensitivity (dH/dT)
+            # Unforced continuation still has gX_T, but dXdT will be zero.
             dHdT = gX_T + dXdT
             J = np.concatenate((dHdX0, dHdT.reshape(-1, 1)), axis=1)
-        elif continuation_parameter == "amplitude":
+        elif continuation_parameter == "force_amp":
             # For amplitude continuation, include force amplitude sensitivity (dH/dF)
             dHdF = dXdF
             J = np.concatenate((dHdX0, dHdF.reshape(-1, 1)), axis=1)
 
-        # solution pose and vel at time 0
-        pose = Xsol[0, :N]
-        vel = Xsol[0, N:]
-
         # Energy
         E0 = (
-            0.5 * np.einsum("ij,ij->i", Xsol[:, N:], np.dot(cls.M, Xsol[:, N:].T).T)
-            + 0.5 * np.einsum("ij,ij->i", Xsol[:, :N], np.dot(cls.K, Xsol[:, :N].T).T)
+            0.5 * np.einsum("ij,ij->i", Xsol[:, n_dof_2:], np.dot(cls.M, Xsol[:, n_dof_2:].T).T)
+            + 0.5 * np.einsum("ij,ij->i", Xsol[:, :n_dof_2], np.dot(cls.K, Xsol[:, :n_dof_2].T).T)
             + 0.25 * cls.Knl * Xsol[:, 0] ** 4
         )
         force_vec = np.array([F * np.sin(2 * np.pi / T * t), np.zeros_like(t)])
-        force_vel = force_vec[0] * Xsol[:, N]
-        damping_vel = np.einsum("ij,ij->i", Xsol[:, N:], (cls.C @ Xsol[:, N:].T).T)
+        force_vel = force_vec[0] * Xsol[:, n_dof_2]
+        damping_vel = np.einsum("ij,ij->i", Xsol[:, n_dof_2:], (cls.C @ Xsol[:, n_dof_2:].T).T)
         E1 = np.array(
             [simpson(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
         )
@@ -169,20 +167,20 @@ class Cubic_Spring:
         energy = np.max(E)
 
         # Calculate acceleration for full time output
-        acc_time = np.zeros_like(Xsol[:, :N])
+        accel = np.zeros_like(Xsol[:, :n_dof_2])
         for i in range(len(t)):
-            x_i = Xsol[i, :N]
-            xdot_i = Xsol[i, N:]
+            x_i = Xsol[i, :n_dof_2]
+            xdot_i = Xsol[i, n_dof_2:]
             KX = cls.K @ x_i
             CXdot = cls.C @ xdot_i
             force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
             fnl_i = np.array([cls.Knl * x_i[0] ** 3, 0])
-            acc_time[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
+            accel[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
 
         if not fulltime:
-            return H, J, pose, vel, energy, True
+            return H, J, energy
         else:
-            return H, J, Xsol[:, :N], Xsol[:, N:], acc_time, energy, True
+            return H, J, Xsol[:, :n_dof_2], Xsol[:, n_dof_2:], accel, energy
 
     @classmethod
     def get_fe_data(cls):

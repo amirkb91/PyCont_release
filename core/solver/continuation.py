@@ -1,6 +1,7 @@
-from ._first_point import first_point
+from ._starting_correction import correct_starting_point
 from ._seqcont import seqcont
 from ._psacont import psacont
+from ._phase_condition import _add_phase_condition
 
 
 class ConX:
@@ -11,10 +12,15 @@ class ConX:
         self.F0 = start.F0
         self.tgt0 = start.tgt0
         self.log = log
+        self.num_phase_constraints = None
+
+    def add_phase_condition(self, J):
+        # Augment the Jacobian with phase condition constraints.
+        return _add_phase_condition(self, J)
 
     def run(self):
         # correct starting solution
-        first_point(self)
+        correct_starting_point(self)
 
         # begin continuation
         if self.prob.parameters["continuation"]["method"] == "sequential":

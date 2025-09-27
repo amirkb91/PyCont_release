@@ -1,55 +1,45 @@
 import numpy as np
 import scipy.linalg as spl
-from ._phase_condition import add_phase_condition
 
 
-def first_point(self):
+def correct_starting_point(self):
     parameters = self.prob.parameters
-    eig_start = parameters["first_point"]["from_eig"]
-    restart = not eig_start
-    forced = parameters["continuation"]["forced"]
-    dofdata = self.prob.doffunction()
-    N = dofdata["ndof_free"]
-    iter_firstpoint = 0
+    func_start = parameters["starting_point"]["source"] == "function"
+    file_start = not func_start
+    forced = "force" in parameters["continuation"]["parameter"]
 
-    if eig_start and not forced:
-        linearsol = self.X0.copy()
+    if func_start and not forced:
+        itercorrect = 0
         while True:
-            if iter_firstpoint > parameters["first_point"]["itermax"]:
-                raise Exception("Max number of iterations reached without convergence.")
+            [H, J, energy] = self.prob.zero_function(self.F0, self.T0, self.X0, parameters)
 
-            [H, J, self.pose, vel, energy, cvg_zerof] = self.prob.zerofunction_firstpoint(
-                1.0, self.F0, self.T0, self.X0, self.pose0, parameters
-            )
-            if not cvg_zerof:
-                raise Exception("Zero function failed.")
-
-            residual = spl.norm(H)
-            # orthogonality to linear solution to avoid trivial 0 solution
-            J = np.block([[J], [self.h, np.zeros((self.nphase, 1))], [linearsol, np.zeros(1)]])
+            residual = spl.norm(H) / spl.norm(self.X0)
 
             self.log.screenout(
                 iter=0,
-                correct=iter_firstpoint,
+                correct=itercorrect,
                 res=residual,
                 freq=1 / self.T0,
                 energy=energy,
             )
 
-            if residual < parameters["continuation"]["tol"] and iter_firstpoint > 0:
+            if residual < parameters["continuation"]["corrections_tolerance"] and itercorrect > 0:
                 break
 
-            # correct X0 and T0
-            iter_firstpoint += 1
-            hx = self.h @ self.X0
-            Z = np.vstack([H, hx.reshape(-1, 1), np.zeros(1)])
-            dxt = spl.lstsq(J, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
-            self.T0 += dxt[-1, 0]
-            dx = dxt[:-1, 0]
-            self.X0 += dx
+            # Correction Step
+            # augment the Jacobian with the phase condition
+            J_corr = self.add_phase_condition(J)
 
-        # set inc to zero as pose will have included inc
-        self.X0[:N] = 0.0
+            # Make corrections orthogonal to X0 to avoid X0 being driven to zero (which
+            # still qualifies as a periodic solution.)
+            J_corr = np.vstack([J_corr, np.append(self.X0, 0)])
+
+            # correct X0 and T0
+            itercorrect += 1
+            Z = np.concatenate([H, np.zeros(self.num_phase_constraints), np.zeros(1)])
+            dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
+            self.X0 += dxt[:-1]
+            self.T0 += dxt[-1]
 
         # Compute Tangent
         J[-1, :] = np.zeros(np.shape(J)[1])
@@ -59,7 +49,7 @@ def first_point(self):
         self.tgt0 = spl.lstsq(J, Z, cond=None, check_finite=False, lapack_driver="gelsd")[0][:, 0]
         self.tgt0 /= spl.norm(self.tgt0)
 
-    elif restart and not forced:
+    elif file_start and not forced:
         # run sim to get data for storing solution
         [H, J, self.pose, vel, energy, _] = self.prob.zerofunction_firstpoint(
             1.0, self.F0, self.T0, self.X0, self.pose0, parameters
@@ -98,7 +88,7 @@ def first_point(self):
                 energy=energy,
             )
 
-            if residual < parameters["continuation"]["tol"] or restart:
+            if residual < parameters["continuation"]["tol"] or file_start:
                 break
 
             # correct only X0
