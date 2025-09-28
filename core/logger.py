@@ -16,8 +16,6 @@ class Logger:
         self.sol_T = []
         self.sol_F = []
         self.sol_tgt = []
-        self.sol_pose = []
-        self.sol_vel = []
         self.sol_energy = []
         self.sol_beta = []
         self.sol_itercorrect = []
@@ -38,10 +36,8 @@ class Logger:
         self.store_index += 1
         for key, _value in sol_data.items():
             value = copy.copy(_value)
-            if key == "sol_pose":
-                self.sol_pose.append(value.flatten(order="F"))
-            elif key == "sol_vel":
-                self.sol_vel.append(value.flatten(order="F"))
+            if key == "sol_X":
+                self.sol_X.append(value)
             elif key == "sol_T":
                 self.sol_T.append(value)
             elif key == "sol_F":
@@ -103,9 +99,10 @@ class Logger:
         print(char * 8 * self.linewidth)
 
     def savetodisk(self):
+        n = len(self.sol_X[0]) // 2
         savefile = h5py.File(self.parameters["logger"]["output_file_name"] + ".h5", "w")
-        savefile["/Config/POSE"] = np.asarray(self.sol_pose).T
-        savefile["/Config/VELOCITY"] = np.asarray(self.sol_vel).T
+        savefile["/Config/INC"] = np.asarray(self.sol_X)[:, :n].T
+        savefile["/Config/VEL"] = np.asarray(self.sol_X)[:, n:].T
         savefile["/T"] = np.asarray(self.sol_T).T
         savefile["/Force_Amp"] = np.asarray(self.sol_F).T
         savefile["/Tangent"] = np.asarray(self.sol_tgt).T
@@ -113,7 +110,7 @@ class Logger:
         savefile["/beta"] = np.asarray(self.sol_beta).T
         savefile["/itercorrect"] = np.asarray(self.sol_itercorrect).T
         savefile["/step"] = np.asarray(self.sol_step).T
-        savefile["/Parameters"] = yaml.dump(self.parameters)
+        savefile["/Parameters"] = yaml.dump(self.parameters, sort_keys=False)
         savefile.close()
 
     def solplot(self):

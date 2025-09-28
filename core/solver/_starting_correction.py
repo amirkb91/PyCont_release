@@ -41,12 +41,17 @@ def correct_starting_point(self):
             self.X0 += dxt[:-1]
             self.T0 += dxt[-1]
 
-        # Compute Tangent
-        J[-1, :] = np.zeros(np.shape(J)[1])
-        J[-1, -1] = 1
-        Z = np.zeros((np.shape(J)[0], 1))
+        # Compute tangent vector
+        # This is done by solving for the nullspace of the Jacobian, while constraining the period
+        # component to 1 (ref. Peeters et al.)
+        J_tgt = self.add_phase_condition(J)
+        J_tgt = np.vstack([J_tgt, np.zeros((1, J_tgt.shape[1]))])
+        J_tgt[-1, -1] = 1
+        Z = np.zeros((J_tgt.shape[0], 1))
         Z[-1] = 1
-        self.tgt0 = spl.lstsq(J, Z, cond=None, check_finite=False, lapack_driver="gelsd")[0][:, 0]
+        self.tgt0 = spl.lstsq(J_tgt, Z, cond=None, check_finite=False, lapack_driver="gelsd")[0][
+            :, 0
+        ]
         self.tgt0 /= spl.norm(self.tgt0)
 
     elif file_start and not forced:
@@ -68,7 +73,7 @@ def correct_starting_point(self):
 
     elif forced:
         while True:
-            if iter_firstpoint > parameters["first_point"]["itermax"]:
+            if itercorrect > parameters["first_point"]["itermax"]:
                 raise Exception("Max number of iterations reached without convergence.")
 
             [H, J, self.pose, vel, energy, cvg_zerof] = self.prob.zerofunction_firstpoint(
@@ -81,7 +86,7 @@ def correct_starting_point(self):
 
             self.log.screenout(
                 iter=0,
-                correct=iter_firstpoint,
+                correct=itercorrect,
                 res=residual,
                 freq=1 / self.T0,
                 amp=self.F0,
@@ -92,7 +97,7 @@ def correct_starting_point(self):
                 break
 
             # correct only X0
-            iter_firstpoint += 1
+            itercorrect += 1
             Z = H
             dx = spl.solve(J[:, :-1], -Z)
             self.X0 += dx[:, 0]
@@ -109,13 +114,12 @@ def correct_starting_point(self):
         self.tgt0 /= spl.norm(self.tgt0)
 
     self.log.store(
-        sol_pose=self.pose,
-        sol_vel=vel,
+        sol_X=self.X0,
         sol_T=self.T0,
         sol_F=self.F0,
         sol_tgt=self.tgt0,
         sol_energy=energy,
-        sol_itercorrect=iter_firstpoint,
+        sol_itercorrect=itercorrect,
         sol_step=0,
     )
     self.log.screenline("-")
