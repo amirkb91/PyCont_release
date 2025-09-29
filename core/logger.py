@@ -41,7 +41,10 @@ class Logger:
 
     def _setup_plotting(self):
         """Initialise matplotlib figure and axes."""
+        plt.ion()
         self.fig = plt.figure(figsize=(11, 9))
+        self.fig.canvas.manager.set_window_title("PyCont - Live Continuation Plot")
+        self.fig.show()
         self.gs = GridSpec(2, 2)
         self.ax = np.array([])
         self.ln = []
@@ -251,7 +254,7 @@ class Logger:
         self._setup_zoom_plot(Energy, T, Amp, is_amplitude_continuation)
 
         # Configure beta plot if needed
-        if self.betaplot and len(beta) > 0:
+        if self.betaplot:
             self._setup_beta_plot(beta)
 
         plt.pause(0.01)

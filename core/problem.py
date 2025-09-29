@@ -231,6 +231,12 @@ class Problem:
                 f"continuation.min_parameter_value ({cont['min_parameter_value']}) must be less than max_parameter_value ({cont['max_parameter_value']})"
             )
 
+        # Rule 4: Phase condition consistency for forced systems
+        if cont["parameter"] in ["force_freq", "force_amp"] and cont["phase_condition_index"] != "":
+            raise ValueError(
+                f"continuation.phase_condition_index must be empty string for forced continuation (parameter='{cont['parameter']}'), got: '{cont['phase_condition_index']}'"
+            )
+
     def fill_defaults(self, data: Dict, defaults: Dict) -> Dict:
         """
         Fill missing parameters with default values

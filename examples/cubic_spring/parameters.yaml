@@ -15,10 +15,10 @@ continuation:
   parameter: period
 
   # Minimum boundary for the continuation parameter.
-  min_parameter_value: 0.1
+  min_parameter_value: 0.15
 
   # Maximum boundary for the continuation parameter.
-  max_parameter_value: 30.0
+  max_parameter_value: 0.23
 
   # Direction for continuation along the solution branch.
   # Options: 1 for increasing parameter, -1 for decreasing.
@@ -49,13 +49,13 @@ continuation:
   min_step_size: 0.001
 
   # Maximum allowable step size for the continuation algorithm.
-  max_step_size: 1.0
+  max_step_size: 2.0
 
   # Index/indices of the velocity degrees of freedom used for the phase condition (UNFORCED).
   # Example: "0" for the first velocity DOF, "0:10" for a range (inclusive).
   # Values may be split with ",". Example: 0:10,20:25
   # Setting phase_condition_index: "all" will constrain all velocity DoFs
-  phase_condition_index: 0,1
+  phase_condition_index: all
 
 # ---------------------------------------------------------------------------- #
 #                            Shooting Parameters                               #
@@ -75,7 +75,7 @@ forcing:
   amplitude: 0.1
 
   # Frequency of the external forcing function.
-  frequency: 0.5
+  frequency: 0.1
 
 # ---------------------------------------------------------------------------- #
 #                           Starting Point Configuration                       #

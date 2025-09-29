@@ -34,7 +34,7 @@ class Cubic_Spring:
 
         # select mode and scaling
         mode = 1
-        scale = 1e-2
+        scale = 0.1
         X0 = scale * eig[:, mode - 1]
         T0 = 1 / frq[mode - 1]
 

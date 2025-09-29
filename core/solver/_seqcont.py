@@ -51,7 +51,7 @@ def seqcont(self):
         param_pred = param_current + step_size * direction
         set_param_value(param_pred)
 
-        # Check bounds before doing expensive correction
+        # Check bounds before doing corrections
         if not (min_param <= get_cont_param_for_bounds() <= max_param):
             print(
                 f"Continuation parameter {get_cont_param_for_bounds():.2e} outside specified bounds [{min_param:.2e}, {max_param:.2e}]."
@@ -129,13 +129,8 @@ def _perform_corrections(self, X_corrected, period, amplitude, parameters, iterc
             print(f"Error evaluating zero function: {e}")
             return False, itercorrect, 1e10, 0.0
 
-        # Calculate normalised residual
         residual = spl.norm(H) / max(spl.norm(X_corrected), 1e-12)
 
-        # Check convergence criteria first
-        converged_now = residual < tolerance and itercorrect >= min_iterations
-
-        # Display correction step
         self.log.screenout(
             iter=itercont,
             correct=itercorrect,
@@ -144,8 +139,10 @@ def _perform_corrections(self, X_corrected, period, amplitude, parameters, iterc
             amp=amplitude,
             energy=energy,
             step=step_size,
-            beta=0.0,
         )
+
+        # Check convergence criteria
+        converged_now = residual < tolerance and itercorrect >= min_iterations
 
         # Return if converged
         if converged_now:
@@ -164,10 +161,7 @@ def _perform_corrections(self, X_corrected, period, amplitude, parameters, iterc
             # Augment Jacobian with phase condition (remove last column as parameter not corrected)
             J_corr = self.add_phase_condition(J[:, :-1])
 
-            # Set up correction system
             Z = np.concatenate([H, np.zeros(self.num_phase_constraints)])
-
-            # Solve correction system
             if not forced:
                 dx = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             else:
