@@ -159,9 +159,9 @@ def _perform_corrections(self, X_corrected, period, amplitude, parameters, iterc
         # Compute correction step
         try:
             # Augment Jacobian with phase condition (remove last column as parameter not corrected)
-            J_corr = self.add_phase_condition(J[:, :-1])
+            J_corr, h = self.add_phase_condition(J[:, :-1])
 
-            Z = np.concatenate([H, np.zeros(self.num_phase_constraints)])
+            Z = np.concatenate([H, h @ X_corrected])
             if not forced:
                 dx = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             else:

@@ -67,7 +67,8 @@ def psacont(self):
                 get_amplitude(), get_period(), X_pred, parameters
             )
 
-            residual = spl.norm(H) / max(spl.norm(X_pred), 1e-12)
+            # residual = spl.norm(H) / max(spl.norm(X_pred), 1e-12)
+            residual = spl.norm(H)
 
             # Check convergence criteria
             converged_now = residual < tolerance and itercorrect >= min_iterations
@@ -96,10 +97,10 @@ def psacont(self):
 
             # Compute corrections orthogonal to tangent
             # Augment the Jacobian with phase condition and tangent
-            J_corr = self.add_phase_condition(J)
+            J_corr, h = self.add_phase_condition(J)
             J_corr = np.vstack([J_corr, tgt])
 
-            Z = np.concatenate([H, np.zeros(self.num_phase_constraints), np.zeros(1)])
+            Z = np.concatenate([H, h @ X_pred, np.zeros(1)])
             if not forced:
                 dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             elif forced:
@@ -122,7 +123,7 @@ def psacont(self):
             elif tangent_predictor == "nullspace_previous":
                 # Augment the Jacobian with phase condition and tangent
                 # Approximate the null space of the Jacobian using the previous tangent (Keller et al.)
-                J_tgt = self.add_phase_condition(J)
+                J_tgt, _ = self.add_phase_condition(J)
                 J_tgt = np.vstack([J_tgt, tgt])
 
                 Z = np.zeros((J_tgt.shape[0], 1))
@@ -143,7 +144,7 @@ def psacont(self):
                 # Augment the Jacobian with phase condition and tangent
                 # Approximate the null space of the Jacobian while constraining the continuation
                 # parameter component to 1  (Peeters et al.)
-                J_tgt = self.add_phase_condition(J)
+                J_tgt, _ = self.add_phase_condition(J)
                 J_tgt = np.vstack([J_tgt, np.zeros((1, J_tgt.shape[1]))])
                 J_tgt[-1, -1] = 1
 

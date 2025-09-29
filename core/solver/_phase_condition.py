@@ -13,7 +13,9 @@ def add_phase_condition(self, J):
         J (np.ndarray): The original Jacobian matrix (n x n+1).
 
     Returns:
-        np.ndarray: The augmented Jacobian matrix.
+        tuple: (J_aug, h) where:
+            - J_aug (np.ndarray): The augmented Jacobian matrix
+            - h (np.ndarray): The phase condition rows matrix
     """
     n_dof = J.shape[0]  # Number of system degrees of freedom
     n_cols = J.shape[1]
@@ -46,12 +48,14 @@ def add_phase_condition(self, J):
     num_constraints = len(constraint_indices)
     self.num_phase_constraints = num_constraints
 
+    # Create the phase condition matrix
+    h = np.zeros((num_constraints, n_dof))
+    for i, v_idx in enumerate(constraint_indices):
+        h[i, v_idx + n_dof_2] = 1.0
+
     # Create the augmented Jacobian
     J_aug = np.zeros((n_dof + num_constraints, n_cols))
     J_aug[:n_dof, :] = J  # Copy original Jacobian
+    J_aug[n_dof:, :n_dof] = h  # Add phase condition rows
 
-    # Add phase condition rows. Each row corresponds to fixing one velocity DOF.
-    for i, v_idx in enumerate(constraint_indices):
-        J_aug[n_dof + i, v_idx + n_dof_2] = 1.0
-
-    return J_aug
+    return J_aug, h

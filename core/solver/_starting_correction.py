@@ -28,14 +28,14 @@ def correct_starting_point(self):
 
             # Compute corrections
             # Augment the Jacobian with phase condition
-            J_corr = self.add_phase_condition(J)
+            J_corr, h = self.add_phase_condition(J)
 
             # Make corrections orthogonal to X0 to avoid X0 being driven to zero (which
             # still qualifies as a periodic solution.)
             J_corr = np.vstack([J_corr, np.append(self.X0, 0)])
 
             # correct X0 and T0
-            Z = np.concatenate([H, np.zeros(self.num_phase_constraints), np.zeros(1)])
+            Z = np.concatenate([H, h @ self.X0, np.zeros(1)])
             dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
             self.X0 += dxt[:-1]
             self.T0 += dxt[-1]
@@ -44,7 +44,7 @@ def correct_starting_point(self):
         # Compute tangent vector
         # This is done by solving for the nullspace of the Jacobian, while constraining the period
         # component to 1 (Peeters et al.)
-        J_tgt = self.add_phase_condition(J)
+        J_tgt, _ = self.add_phase_condition(J)  # Ignore h matrix for now
         J_tgt = np.vstack([J_tgt, np.zeros((1, J_tgt.shape[1]))])
         J_tgt[-1, -1] = 1
         Z = np.zeros((J_tgt.shape[0], 1))
