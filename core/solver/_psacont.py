@@ -3,7 +3,13 @@ import scipy.linalg as spl
 
 
 def psacont(self):
+    """
+    Pseudo-arc length continuation method.
 
+    This method performs continuation by correcting both the solution variables X,
+    and the continuation parameter (T or F) at predicted values, with corrections
+    made orthogonal to the tangent vector.
+    """
     # Starting point solution
     X = self.X0
     T = self.T0
@@ -63,12 +69,16 @@ def psacont(self):
         # Correction iterations
         itercorrect = 0
         while True:
-            H, J, energy = self.prob.zero_function(
-                get_amplitude(), get_period(), X_pred, parameters
-            )
+            try:
+                H, J, energy = self.prob.zero_function(
+                    get_amplitude(), get_period(), X_pred, parameters
+                )
+            except Exception as e:
+                print(f"Error evaluating zero function: {e}")
+                converged_now = False
+                break
 
-            # residual = spl.norm(H) / max(spl.norm(X_pred), 1e-12)
-            residual = spl.norm(H)
+            residual = spl.norm(H) / max(spl.norm(X_pred), 1e-12)
 
             # Check convergence criteria
             converged_now = residual < tolerance and itercorrect >= min_iterations
@@ -83,7 +93,7 @@ def psacont(self):
             # Maximum iterations reached
             if itercorrect >= max_iterations:
                 converged_now = False
-                break        
+                break
 
             self.log.screenout(
                 iter=itercont,
@@ -172,7 +182,7 @@ def psacont(self):
                 energy=energy,
                 step=direction * step_size,
                 beta=beta,
-            )
+            )  # need final screenout to print beta
             self.log.store(
                 sol_X=X_pred,
                 sol_T=get_period(),

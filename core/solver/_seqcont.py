@@ -18,6 +18,10 @@ def seqcont(self):
     parameters = self.prob.parameters
     continuation_parameter = parameters["continuation"]["parameter"]
     step_size = parameters["continuation"]["initial_step_size"]
+    max_iterations = parameters["continuation"]["max_iterations"]
+    min_iterations = parameters["continuation"]["min_iterations"]
+    tolerance = parameters["continuation"]["corrections_tolerance"]
+    forced = "force" in parameters["continuation"]["parameter"]
 
     # Continuation limits
     max_points = parameters["continuation"]["num_points"]
@@ -60,104 +64,45 @@ def seqcont(self):
 
         # Correction iterations
         X_corrected = X.copy()
-        converged, itercorrect, residual, energy = _perform_corrections(
-            self,
-            X_corrected,
-            get_period(),
-            get_amplitude(),
-            parameters,
-            itercont,
-            step_size,
-        )
+        itercorrect = 0
+        while True:
+            try:
+                H, J, energy = self.prob.zero_function(
+                    get_amplitude(), get_period(), X_corrected, parameters
+                )
+            except Exception as e:
+                print(f"Error evaluating zero function: {e}")
+                converged_now = False
+                break
 
-        # Handle convergence results
-        if converged:
-            self.log.store(
-                sol_X=X_corrected,
-                sol_T=get_period(),
-                sol_F=get_amplitude(),
-                sol_energy=energy,
-                sol_itercorrect=itercorrect,
-                sol_step=step_size,
+            residual = spl.norm(H) / max(spl.norm(X_corrected), 1e-12)
+
+            self.log.screenout(
+                iter=itercont,
+                correct=itercorrect,
+                res=residual,
+                freq=1 / get_period(),
+                amp=get_amplitude(),
+                energy=energy,
+                step=step_size,
             )
 
-            # Accept the corrected solution
-            param_current = get_param_value()
-            X = X_corrected
-            itercont += 1
-        else:
-            print(f"Correction failed at iteration {itercont}. Residual: {residual:.2e}")
+            # Check convergence criteria
+            converged_now = residual < tolerance and itercorrect >= min_iterations
+            if converged_now:
+                break
 
-        # Adaptive step size for next point
-        if itercont > parameters["continuation"]["adaptive_step_start"] or not converged:
-            step_size = self.adapt_stepsize(step_size, itercorrect, converged)
+            # Check divergence criteria
+            if residual > 1e10:
+                converged_now = False
+                break
 
-        # Early exit if step size becomes too small
-        if abs(step_size) < parameters["continuation"]["min_step_size"]:
-            print("Step size too small. Terminating continuation.")
-            break
+            # Maximum iterations reached
+            if itercorrect >= max_iterations:
+                converged_now = False
+                break
 
-        self.log.screenline("-")
-
-
-def _perform_corrections(self, X_corrected, period, amplitude, parameters, itercont, step_size):
-    """
-    Perform Newton-Raphson corrections for sequential continuation.
-
-    Args:
-        X_corrected: Solution vector to correct (modified in-place)
-        period: Current period value
-        amplitude: Current amplitude value
-        parameters: Problem parameters
-        itercont: Current continuation iteration number
-        step_size: Current step size
-
-    Returns:
-        tuple: (converged, itercorrect, residual, energy)
-    """
-    itercorrect = 0
-    max_iterations = parameters["continuation"]["max_iterations"]
-    min_iterations = parameters["continuation"]["min_iterations"]
-    tolerance = parameters["continuation"]["corrections_tolerance"]
-    forced = "force" in parameters["continuation"]["parameter"]
-
-    while True:
-        # Evaluate zero function and Jacobian
-        try:
-            H, J, energy = self.prob.zero_function(amplitude, period, X_corrected, parameters)
-        except Exception as e:
-            print(f"Error evaluating zero function: {e}")
-            return False, itercorrect, 1e10, 0.0
-
-        residual = spl.norm(H) / max(spl.norm(X_corrected), 1e-12)
-
-        self.log.screenout(
-            iter=itercont,
-            correct=itercorrect,
-            res=residual,
-            freq=1 / period,
-            amp=amplitude,
-            energy=energy,
-            step=step_size,
-        )
-
-        # Check convergence criteria
-        converged_now = residual < tolerance and itercorrect >= min_iterations
-
-        # Return if converged
-        if converged_now:
-            return True, itercorrect, residual, energy
-
-        # Check divergence criteria
-        if residual > 1e10:
-            return False, itercorrect, residual, energy
-
-        # Maximum iterations reached
-        if itercorrect >= max_iterations:
-            return False, itercorrect, residual, energy
-
-        # Compute correction step
-        try:
+            # Compute corrections
             # Augment Jacobian with phase condition (remove last column as parameter not corrected)
             J_corr, h = self.add_phase_condition(J[:, :-1])
 
@@ -171,6 +116,28 @@ def _perform_corrections(self, X_corrected, period, amplitude, parameters, iterc
             X_corrected += dx
             itercorrect += 1
 
-        except (spl.LinAlgError, np.linalg.LinAlgError) as e:
-            print(f"Linear algebra error during correction: {e}")
-            return False, itercorrect, 1e10, energy
+        if converged_now:
+            self.log.store(
+                sol_X=X_corrected,
+                sol_T=get_period(),
+                sol_F=get_amplitude(),
+                sol_energy=energy,
+                sol_itercorrect=itercorrect,
+                sol_step=direction * step_size,
+            )
+
+            # Accept the corrected solution
+            param_current = get_param_value()
+            X = X_corrected
+            itercont += 1
+
+        # Adaptive step size for next point
+        if itercont > parameters["continuation"]["adaptive_step_start"] or not converged_now:
+            step_size = self.adapt_stepsize(step_size, itercorrect, converged_now)
+
+        # Early exit if step size becomes too small
+        if abs(step_size) < parameters["continuation"]["min_step_size"]:
+            print("Step size too small. Terminating continuation.")
+            break
+
+        self.log.screenline("-")
