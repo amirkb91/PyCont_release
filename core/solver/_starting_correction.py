@@ -54,6 +54,42 @@ def correct_starting_point(self):
         ]
         self.tgt0 /= spl.norm(self.tgt0)
 
+    elif func_start and forced:
+        itercorrect = 0
+        while True:
+            H, J, energy = self.prob.zero_function(self.F0, self.T0, self.X0, parameters)
+
+            residual = spl.norm(H) / max(spl.norm(self.X0), 1e-12)
+
+            self.log.screenout(
+                iter=0,
+                correct=itercorrect,
+                res=residual,
+                freq=1 / self.T0,
+                amp=self.F0,
+                energy=energy,
+            )
+
+            if residual < parameters["continuation"]["corrections_tolerance"] and itercorrect > 0:
+                break
+
+            # Compute corrections
+            # Don't need phase condition augmentation for forced system
+            # Only correct X0 and keep F and T fixed
+            dx = spl.solve(J[:, :-1], -H)
+            self.X0 += dx
+            itercorrect += 1
+
+        # Compute tangent vector
+        # This is done by solving for the nullspace of the Jacobian, while constraining the period
+        # component to 1 (Peeters et al.)
+        J = np.vstack([J, np.zeros((1, J.shape[1]))])
+        J[-1, -1] = 1
+        Z = np.zeros((J.shape[0], 1))
+        Z[-1] = 1
+        self.tgt0 = spl.solve(J, Z)[:, 0]
+        self.tgt0 /= spl.norm(self.tgt0)
+
     elif file_start and not forced:
         # run sim to get data for storing solution
         [H, J, self.pose, vel, energy, _] = self.prob.zerofunction_firstpoint(
@@ -70,48 +106,6 @@ def correct_starting_point(self):
             self.tgt0 /= spl.norm(self.tgt0)
 
         self.log.screenout(iter=0, correct=0, res=residual, freq=1 / self.T0, energy=energy)
-
-    elif forced:
-        while True:
-            if itercorrect > parameters["first_point"]["itermax"]:
-                raise Exception("Max number of iterations reached without convergence.")
-
-            [H, J, self.pose, vel, energy, cvg_zerof] = self.prob.zerofunction_firstpoint(
-                1.0, self.F0, self.T0, self.X0, self.pose0, parameters
-            )
-            if not cvg_zerof:
-                raise Exception("Zero function failed.")
-
-            residual = spl.norm(H)  # Note this is different to psacont residual not normalised
-
-            self.log.screenout(
-                iter=0,
-                correct=itercorrect,
-                res=residual,
-                freq=1 / self.T0,
-                amp=self.F0,
-                energy=energy,
-            )
-
-            if residual < parameters["continuation"]["tol"] or file_start:
-                break
-
-            # correct only X0
-            itercorrect += 1
-            Z = H
-            dx = spl.solve(J[:, :-1], -Z)
-            self.X0 += dx[:, 0]
-
-        # set inc to zero as pose will have included inc
-        self.X0[:N] = 0.0
-
-        # Compute Tangent
-        J = np.block([[J], [np.zeros(np.shape(J)[1])]])
-        J[-1, -1] = 1
-        Z = np.zeros((np.shape(J)[0], 1))
-        Z[-1] = 1
-        self.tgt0 = spl.solve(J, Z)[:, 0]
-        self.tgt0 /= spl.norm(self.tgt0)
 
     self.log.store(
         sol_X=self.X0,

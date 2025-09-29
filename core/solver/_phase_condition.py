@@ -26,14 +26,11 @@ def add_phase_condition(self, J):
     constraint_indices = []
     idx_setting = self.prob.parameters["continuation"]["phase_condition_index"]
 
-    if not idx_setting:
-        raise ValueError("Phase condition index not specified in parameter file.")
-
     if idx_setting == "all":
         # Constrain all velocity degrees of freedom.
         # This assumes velocities are the second half of the state vector.
         constraint_indices = list(range(n_dof_2))
-    else:
+    elif idx_setting != "":
         # Parse comma-separated indices and colon-separated ranges (e.g., "0:2,4").
         parts = idx_setting.split(",")
         for part in parts:
