@@ -11,7 +11,7 @@ def correct_starting_point(self):
     if func_start and not forced:
         itercorrect = 0
         while True:
-            [H, J, energy] = self.prob.zero_function(self.F0, self.T0, self.X0, parameters)
+            H, J, energy = self.prob.zero_function(self.F0, self.T0, self.X0, parameters)
 
             residual = spl.norm(H) / spl.norm(self.X0)
 
@@ -26,7 +26,7 @@ def correct_starting_point(self):
             if residual < parameters["continuation"]["corrections_tolerance"] and itercorrect > 0:
                 break
 
-            # Correction Step
+            # Compute corrections
             # augment the Jacobian with the phase condition
             J_corr = self.add_phase_condition(J)
 
