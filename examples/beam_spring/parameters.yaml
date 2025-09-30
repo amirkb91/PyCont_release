@@ -12,13 +12,13 @@ continuation:
 
   # The primary parameter to vary during continuation.
   # Options: 'force_amp' (forcing amplitude), 'force_freq' (forcing frequency), 'period'.
-  parameter: period
+  parameter: force_amp
 
   # Minimum boundary for the continuation parameter (stopping criteria).
-  min_parameter_value: 0.15
+  min_parameter_value: 0.1
 
   # Maximum boundary for the continuation parameter (stopping criteria).
-  max_parameter_value: 0.23
+  max_parameter_value: 2.0
 
   # Direction for continuation along the solution branch.
   # Options: 1 for increasing parameter, -1 for decreasing.
@@ -43,20 +43,20 @@ continuation:
   adaptive_step_start: 2
 
   # Initial step size for the continuation algorithm.
-  initial_step_size: 0.005
+  initial_step_size: 1e-4
 
   # Minimum allowable step size for the continuation algorithm.
-  min_step_size: 0.001
+  min_step_size: 1e-6
 
   # Maximum allowable step size for the continuation algorithm.
-  max_step_size: 2.0
+  max_step_size: 5e-2
 
   # Index/indices of the velocity degrees of freedom used for the phase condition (UNFORCED).
   # Example: "0" for the first velocity DOF, "0:10" for a range (inclusive).
   # Values may be split with ",". Example: 0:10,20:25
   # Setting phase_condition_index: "all" will constrain all velocity DoFs
   # For forced continuation, this should be an empty string since phase is determined by forcing.
-  phase_condition_index: all
+  phase_condition_index: ""
 
 # ---------------------------------------------------------------------------- #
 #                            Shooting Parameters                               #
@@ -76,7 +76,7 @@ forcing:
   amplitude: 0.5
 
   # Forcing frequency to start forced continuation from.
-  frequency: 0.2
+  frequency: 18
 
 # ---------------------------------------------------------------------------- #
 #                           Starting Point Configuration                       #

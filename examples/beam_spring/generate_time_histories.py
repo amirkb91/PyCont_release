@@ -3,7 +3,7 @@ import yaml
 from alive_progress import alive_bar
 import sys, shutil
 import numpy as np
-from cubic_spring import Cubic_Spring
+from beam_spring import Beam_Spring
 from postprocess.bifurcation import bifurcation_functions
 
 """ 
@@ -13,6 +13,10 @@ and appends the results to the HDF5 solution file for subsequent postprocessing.
 
 run_bif = input("Compute bifurcation functions (y/n)? ")
 if run_bif not in ("y", "n"):
+    raise Exception("Input not valid")
+
+store_physical = input("Store physical displacement at tip (p) or modal coordinates (m)? ")
+if store_physical not in ("p", "m"):
     raise Exception("Input not valid")
 
 # Read solution file
@@ -44,14 +48,26 @@ else:
 
 n_solpoints = len(T)
 nsteps = par["shooting"]["steps_per_period"]
-n_dof_store = np.shape(inc)[0]
+
+# Determine storage dimensions based on choice
+if store_physical == "p":
+    # For physical displacement: 1 DOF (tip displacement)
+    n_dof_store = 1
+    storage_label = "Physical Tip Displacement"
+else:
+    # For modal coordinates: 2 DOF (modal coordinates)
+    n_dof_store = np.shape(inc)[0]
+    storage_label = "Modal Coordinates"
+
 inc_time = np.zeros([n_dof_store, nsteps + 1, n_solpoints])
 vel_time = np.zeros([n_dof_store, nsteps + 1, n_solpoints])
 acc_time = np.zeros([n_dof_store, nsteps + 1, n_solpoints])
 time = np.zeros([n_solpoints, nsteps + 1])
 
+print(f"Storage configuration: {storage_label}")
+
 # Update model and run simulations
-Cubic_Spring.update_model(par)
+Beam_Spring.update_model(par)
 if run_bif == "y":
     Floquet = np.zeros([4, n_solpoints], dtype=np.complex128)
     Stability = np.zeros(n_solpoints)
@@ -66,17 +82,30 @@ with alive_bar(n_solpoints) as bar:
 
         if run_bif == "n":
             # no need for monodromy
-            _inc, _vel, _acc = Cubic_Spring.time_simulate(F[i], T[i], X, par)
+            _inc, _vel, _acc = Beam_Spring.time_simulate(F[i], T[i], X, par)
         elif run_bif == "y":
-            _inc, _vel, _acc, M = Cubic_Spring.time_simulate_with_monodromy(F[i], T[i], X, par)
+            _inc, _vel, _acc, M = Beam_Spring.time_simulate_with_monodromy(F[i], T[i], X, par)
 
-        # Store the time series data
-        inc_time[:, :, i] = _inc.T
-        vel_time[:, :, i] = _vel.T
-        acc_time[:, :, i] = _acc.T
+        if store_physical == "p":
+            # Convert modal coordinates to physical displacement at tip
+            phi_L = Beam_Spring.phi_L  # Mode shapes at tip location
+
+            # Transform modal coordinates to physical displacement: u_tip = phi_L @ q
+            _inc = phi_L @ _inc.T  # Shape: (1, nsteps+1)
+            _vel = phi_L @ _vel.T  # Shape: (1, nsteps+1)
+            _acc = phi_L @ _acc.T  # Shape: (1, nsteps+1)
+
+            # Store physical displacement data
+            inc_time[:, :, i] = _inc
+            vel_time[:, :, i] = _vel
+            acc_time[:, :, i] = _acc
+        else:
+            # Store modal coordinates directly
+            inc_time[:, :, i] = _inc.T
+            vel_time[:, :, i] = _vel.T
+            acc_time[:, :, i] = _acc.T
 
         if run_bif == "y":
-            # Compute bifurcation functions
             bifurcation_out = bifurcation_functions(M)
             Floquet[:, i] = bifurcation_out[0]
             Stability[i] = bifurcation_out[1]
@@ -88,6 +117,7 @@ with alive_bar(n_solpoints) as bar:
 
 # Write time series data to file
 with h5py.File(new_file, "a") as time_data:
+
     # Create or overwrite Config_Time group
     if "Config_Time" in time_data:
         del time_data["Config_Time"]
@@ -96,6 +126,7 @@ with h5py.File(new_file, "a") as time_data:
     time_group.create_dataset("VELOCITY", data=vel_time)
     time_group.create_dataset("ACCELERATION", data=acc_time)
     time_group.create_dataset("Time", data=time)
+    time_group.create_dataset("Coordinate_System", data=storage_label)
 
     # Write bifurcation data if computed
     if "Bifurcation" in time_data:

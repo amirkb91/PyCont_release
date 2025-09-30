@@ -1,34 +1,28 @@
-import sys
 from core.problem import Problem
+from core.startingpoint import StartingPoint
 from core.logger import Logger
 from core.solver.continuation import ConX
-from core.startingpoint import StartingPoint
 
 from beam_spring import Beam_Spring
 
-# Check command line arguments
-if len(sys.argv) != 2:
-    config_file = "contparameters.json"
-else:
-    config_file = sys.argv[1]
-
 # Problem
 prob = Problem()
-prob.configure_parameters(config_file)
-prob.add_doffunction(Beam_Spring.get_fe_data)
-prob.set_starting_function(Beam_Spring.eigen_solve)
-prob.set_zero_function(Beam_Spring.time_solve)
+prob.configure_parameters("parameters.yaml")
+prob.set_zero_function(Beam_Spring.periodicity)
 
-# Initialise forcing parameters if continuation is forced
-Beam_Spring.forcing_parameters(prob.parameters)
+# Update model based on parameters if system is forced
+Beam_Spring.update_model(prob.parameters)
 
-# Continuation starting point
-start = StartingPoint(prob)
-start.starting_values_from_function()
+# Starting point for continuation
+start = StartingPoint(prob.parameters)
+start.set_starting_function(Beam_Spring.eigen)
+start.get_starting_values()
 
-# Logger
-log = Logger(prob)
+# Logger to log and store solution
+log = Logger(prob.parameters)
 
-# Solve continuation on problem
+# Continuation
 con = ConX(prob, start, log)
+
+# Run continuation on problem
 con.run()

@@ -1,14 +1,14 @@
-"""
-Visualises the time-domain dynamics of a single solution point from a continuation branch,
-displaying position, velocity, and acceleration as interactive plots.
-"""
-
 import h5py
 import sys
 import yaml
 import numpy as np
 from cubic_spring import Cubic_Spring
 import matplotlib.pyplot as plt
+
+"""
+Visualises the time-domain dynamics of a single solution point from a continuation branch,
+displaying position, velocity, and acceleration as interactive plots.
+"""
 
 plt.rcParams["text.usetex"] = True
 

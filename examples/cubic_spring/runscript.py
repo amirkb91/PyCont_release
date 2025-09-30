@@ -9,7 +9,7 @@ prob = Problem()
 prob.configure_parameters("parameters.yaml")
 prob.set_zero_function(Cubic_Spring.periodicity)
 
-# update model based on parameters
+# Update model based on parameters if system is forced
 Cubic_Spring.update_model(prob.parameters)
 
 # Starting point for continuation

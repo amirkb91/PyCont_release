@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simpson
+from scipy.integrate import solve_ivp, simpson
 import scipy.linalg as spl
 
 
@@ -29,11 +29,11 @@ class Beam_Spring:
     config_per_node = 1
 
     @classmethod
-    def forcing_parameters(cls, parameters):
+    def update_model(cls, parameters):
         """
         update parameters if continuation is forced
         """
-        if parameters["continuation"]["forced"]:
+        if "force" in parameters["continuation"]["parameter"]:
             zeta_1 = 0.03
             zeta_2 = 0.09
             cls.C = np.array([[2 * zeta_1 * cls.w_1, 0], [0, 2 * zeta_2 * cls.w_2]])
@@ -52,7 +52,7 @@ class Beam_Spring:
         return Xdot
 
     @classmethod
-    def model_sens_ode(cls, t, ic, T, F):
+    def model_ode_with_sens(cls, t, ic, T, F):
         """
         Augmented ODE of model + sensitivities, to be solved together
         System: Xdot(t) = g(X(t))
@@ -114,7 +114,7 @@ class Beam_Spring:
         return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten(), dXdFdot.flatten()])
 
     @classmethod
-    def eigen_solve(cls):
+    def eigen(cls):
         """
         For modal model: frequencies are already known, eigenvectors are identity
         since we're working in modal coordinates
@@ -123,55 +123,67 @@ class Beam_Spring:
         frq = np.array([[cls.w_1 / (2 * np.pi)], [cls.w_2 / (2 * np.pi)]])
         eig = np.eye(cls.ndof_free)
 
-        # Initial position taken as zero for both modal coordinates
-        pose0 = np.zeros(cls.ndof_free)
+        # select mode and scaling
+        mode = 1
+        scale = 1e-5
+        X0 = scale * eig[:, mode - 1]
+        T0 = 1 / frq[mode - 1]
 
-        return eig, frq, pose0
+        # add zeros for velocity degrees of freedom
+        X0 = np.append(X0, np.zeros_like(X0))
+
+        return X0, T0
 
     @classmethod
-    def time_solve(cls, omega, F, T, X, pose_base, parameters, sensitivity=True, fulltime=False):
-        nsteps = parameters["shooting"]["single"]["nsteps_per_period"]
-        rel_tol = parameters["shooting"]["rel_tol"]
-        continuation_parameter = parameters["continuation"]["continuation_parameter"]
-        N = cls.ndof_free
-        twoN = 2 * N
+    def periodicity(cls, F, T, X, parameters):
+        # Compute periodicity function and it's sensitivity
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+        continuation_parameter = parameters["continuation"]["parameter"]
 
-        # Add position to increment and do time sim to get solution and sensitivities
-        X0 = X + np.concatenate((pose_base, np.zeros(N)))
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation
         t = np.linspace(0, T, nsteps + 1)
         # Initial conditions for the augmented system: X0, eye for monodromy, zeros for time and force sens
-        all_ic = np.concatenate((X0, np.eye(twoN).flatten(), np.zeros(twoN), np.zeros(twoN)))
-        sol = np.array(
-            odeint(cls.model_sens_ode, all_ic, t, args=(T, F), rtol=rel_tol, tfirst=True)
+        all_ic = np.concatenate((X, np.eye(n_dof).flatten(), np.zeros(n_dof), np.zeros(n_dof)))
+
+        # solve_ivp integration
+        result = solve_ivp(
+            cls.model_ode_with_sens,
+            t_span=[0, T],
+            y0=all_ic,
+            t_eval=t,
+            args=(T, F),
+            rtol=rel_tol,
+            method="RK45",
         )
+        sol = result.y.T
         # unpack solution
         Xsol, M, dXdT, dXdF = (
-            sol[:, :twoN],
-            sol[-1, twoN : twoN + twoN**2].reshape(twoN, twoN),
-            sol[-1, twoN + twoN**2 : twoN + twoN**2 + twoN],
-            sol[-1, twoN + twoN**2 + twoN :],
+            sol[:, :n_dof],
+            sol[-1, n_dof : n_dof + n_dof**2].reshape(n_dof, n_dof),
+            sol[-1, n_dof + n_dof**2 : n_dof + n_dof**2 + n_dof],
+            sol[-1, n_dof + n_dof**2 + n_dof :],
         )
 
-        # periodicity condition
+        # Periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
-        H = H.reshape(-1, 1)
 
-        # Jacobian construction depends on continuation parameter
-        dHdX0 = M - np.eye(twoN)
+        # Jacobian construction
+        dHdX0 = M - np.eye(n_dof)
         gX_T = cls.model_ode(T, Xsol[-1, :], T, F)
 
-        if continuation_parameter == "frequency":
+        if continuation_parameter == "force_freq" or F == 0:
             # For frequency continuation, include period sensitivity (dH/dT)
+            # Unforced continuation still has gX_T, but dXdT will be zero.
             dHdT = gX_T + dXdT
             J = np.concatenate((dHdX0, dHdT.reshape(-1, 1)), axis=1)
-        elif continuation_parameter == "amplitude":
+        elif continuation_parameter == "force_amp":
             # For amplitude continuation, include force amplitude sensitivity (dH/dF)
             dHdF = dXdF
             J = np.concatenate((dHdX0, dHdF.reshape(-1, 1)), axis=1)
-
-        # solution pose and vel at time 0
-        pose = Xsol[0, :N]
-        vel = Xsol[0, N:]
 
         # Energy calculation
         # Kinetic energy: 0.5 * xdot^T * M * xdot
@@ -184,48 +196,107 @@ class Beam_Spring:
         # on the physical tip displacement (u = phi_L @ x), not on its projection.
         # Therefore, for energy, we use (1/4) * k_nl * (phi_L @ x)**4, without any projection.
 
-        phi_x_sol = cls.phi_L @ Xsol[:, :N].T
+        phi_x_sol = cls.phi_L @ Xsol[:, :n_dof_2].T
         E0 = (
-            0.5 * np.einsum("ij,ij->i", Xsol[:, N:], np.dot(cls.M, Xsol[:, N:].T).T)
-            + 0.5 * np.einsum("ij,ij->i", Xsol[:, :N], np.dot(cls.K, Xsol[:, :N].T).T)
+            0.5 * np.einsum("ij,ij->i", Xsol[:, n_dof_2:], np.dot(cls.M, Xsol[:, n_dof_2:].T).T)
+            + 0.5 * np.einsum("ij,ij->i", Xsol[:, :n_dof_2], np.dot(cls.K, Xsol[:, :n_dof_2].T).T)
             + 0.25 * cls.k_nl * phi_x_sol[0, :] ** 4
         )
         force_vec = np.array([F * np.sin(2 * np.pi / T * t), np.zeros_like(t)])
-        force_vel = force_vec[0] * Xsol[:, N]
-        damping_vel = np.einsum("ij,ij->i", Xsol[:, N:], (cls.C @ Xsol[:, N:].T).T)
+        force_vel = force_vec[0] * Xsol[:, n_dof_2]
+        damping_vel = np.einsum("ij,ij->i", Xsol[:, n_dof_2:], (cls.C @ Xsol[:, n_dof_2:].T).T)
         E1 = np.array(
             [simpson(force_vel[: i + 1] - damping_vel[: i + 1], t[: i + 1]) for i in range(len(t))]
         )
         E = E0 + E1
         energy = np.max(E)
 
-        # Calculate acceleration for full time output
-        acc_time = np.zeros_like(Xsol[:, :N])
+        return H, J, energy
+
+    @classmethod
+    def time_simulate(cls, F, T, X, parameters):
+        """
+        Perform time simulation only, returning position increment, velocity, and acceleration.
+        """
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation
+        t = np.linspace(0, T, nsteps + 1)
+
+        # solve_ivp integration for system dynamics only
+        result = solve_ivp(
+            cls.model_ode, t_span=[0, T], y0=X, t_eval=t, args=(T, F), rtol=rel_tol, method="RK45"
+        )
+        Xsol = result.y.T
+
+        # Split into position and velocity
+        increment = Xsol[:, :n_dof_2]
+        velocity = Xsol[:, n_dof_2:]
+
+        # Calculate acceleration for all time steps
+        acceleration = np.zeros_like(increment)
         for i in range(len(t)):
-            x_i = Xsol[i, :N]
-            xdot_i = Xsol[i, N:]
+            x_i = increment[i, :]
+            xdot_i = velocity[i, :]
             KX = cls.K @ x_i
             CXdot = cls.C @ xdot_i
             force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
             phi_x_i = cls.phi_L @ x_i
             fnl_i = cls.k_nl * cls.phi_L.T @ (phi_x_i**3)
-            acc_time[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
+            acceleration[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
 
-        if not fulltime:
-            return H, J, pose, vel, energy, True
-        else:
-            return H, J, Xsol[:, :N], Xsol[:, N:], acc_time, energy, True
+        return increment, velocity, acceleration
 
     @classmethod
-    def get_fe_data(cls):
-        return {
-            "free_dof": cls.free_dof,
-            "ndof_all": cls.ndof_all,
-            "ndof_fix": cls.ndof_fix,
-            "ndof_free": cls.ndof_free,
-            "nnodes_all": cls.nnodes_all,
-            "config_per_node": cls.config_per_node,
-            "dof_per_node": cls.ndof_free,
-            "n_dim": 1,
-            "SEbeam": False,
-        }
+    def time_simulate_with_monodromy(cls, F, T, X, parameters):
+        """
+        Perform time simulation with monodromy matrix calculation.
+        """
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation with monodromy matrix calculation
+        t = np.linspace(0, T, nsteps + 1)
+        # Initial conditions: X0 + eye for monodromy + zeros for parameter sensitivities
+        all_ic = np.concatenate((X, np.eye(n_dof).flatten(), np.zeros(n_dof), np.zeros(n_dof)))
+
+        # solve_ivp integration with monodromy (using existing model_ode_with_sens)
+        result = solve_ivp(
+            cls.model_ode_with_sens,
+            t_span=[0, T],
+            y0=all_ic,
+            t_eval=t,
+            args=(T, F),
+            rtol=rel_tol,
+            method="RK45",
+        )
+        sol = result.y.T
+
+        # Unpack solution and monodromy matrix
+        Xsol = sol[:, :n_dof]
+        M = sol[-1, n_dof : n_dof + n_dof**2].reshape(n_dof, n_dof)
+
+        # Split into position and velocity
+        increment = Xsol[:, :n_dof_2]
+        velocity = Xsol[:, n_dof_2:]
+
+        # Calculate acceleration for all time steps
+        acceleration = np.zeros_like(increment)
+        for i in range(len(t)):
+            x_i = increment[i, :]
+            xdot_i = velocity[i, :]
+            KX = cls.K @ x_i
+            CXdot = cls.C @ xdot_i
+            force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
+            phi_x_i = cls.phi_L @ x_i
+            fnl_i = cls.k_nl * cls.phi_L.T @ (phi_x_i**3)
+            acceleration[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
+
+        return increment, velocity, acceleration, M
