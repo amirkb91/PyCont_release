@@ -88,67 +88,75 @@ class Beam_Spring:
         # Add position to increment and do time sim to get solution
         X0 = X + np.concatenate((pose_base, np.zeros(N)))
         t = np.linspace(0, T, nsteps + 1)
+        # print(f"X0: {X0}")
 
         # ODE Solver setup
         term = ODETerm(cls.model_ode)
         solver = Tsit5()
         saveat = SaveAt(ts=jnp.linspace(0, T, nsteps + 1))
 
-        sol = diffeqsolve(term, solver, t0=t[0], t1=t[-1], dt0=t[1]-t[0], y0=X0, args=(
-            T, F), saveat=saveat, stepsize_controller=PIDController(rtol=rel_tol, atol=rel_tol), max_steps=1000000)
-        Xsol = sol.ys
+        try:
+            sol = diffeqsolve(term, solver, t0=t[0], t1=t[-1], dt0=t[1]-t[0], y0=X0, args=(
+                T, F), saveat=saveat, stepsize_controller=PIDController(rtol=rel_tol, atol=rel_tol), max_steps=50000)
+            Xsol = sol.ys
 
-        # Periodicity
-        def periodicity(X0, T, F):
-            t = jnp.linspace(0, T, nsteps + 1)
-            Xsol = diffeqsolve(term, solver, t0=t[0], t1=t[-1], dt0=t[1]-t[0], y0=X0, args=(
-                T, F), saveat=saveat, stepsize_controller=PIDController(rtol=rel_tol, atol=rel_tol), max_steps=1000000)
-            H = Xsol.ys[-1, :] - Xsol.ys[0, :]
-            return H.reshape(-1, 1)
+            # Periodicity
+            def periodicity(X0, T, F):
+                t = jnp.linspace(0, T, nsteps + 1)
+                Xsol = diffeqsolve(term, solver, t0=t[0], t1=t[-1], dt0=t[1]-t[0], y0=X0, args=(
+                    T, F), saveat=saveat, stepsize_controller=PIDController(rtol=rel_tol, atol=rel_tol), max_steps=50000)
+                H = Xsol.ys[-1, :] - Xsol.ys[0, :]
+                return H.reshape(-1, 1)
 
-        H = periodicity(X0, T, F)
-        # print(f"H: {H}")
+            H = periodicity(X0, T, F)
+            # print(f"H: {H}")
 
-        # Monodromy
-        dHdX0 = jax.jacrev(periodicity, argnums=0)(X0, T, F)
-        dHdX0 = dHdX0.squeeze()
-        # print(f"dHdX0: {dHdX0}, {dHdX0.shape}")
+            # Monodromy
+            dHdX0 = jax.jacrev(periodicity, argnums=0)(X0, T, F)
+            dHdX0 = dHdX0.squeeze()
+            # print(f"dHdX0: {dHdX0}, {dHdX0.shape}")
 
-        if continuation_parameter == "frequency":
-            # For frequency continuation, include period sensitivity (dH/dT)
-            dHdT = jax.jacrev(periodicity, argnums=1)(X0, T, F)
-            J = np.concatenate((dHdX0, dHdT), axis=1)
-        elif continuation_parameter == "amplitude":
-            # For amplitude continuation, include force amplitude sensitivity (dH/dF)
-            dHdF = jax.jacrev(periodicity, argnums=2)(X0, T, F)
-            # print(f"dHdF: {dHdF}, {dHdF.shape}")
-            J = np.concatenate((dHdX0, dHdF), axis=1)
-        # print(f"J: {J.shape}")
-        # print(f"J: {J}")
-        # print(f"Condition number of Jacobian: {np.linalg.cond(J, p=2)}")
+            if continuation_parameter == "frequency":
+                # For frequency continuation, include period sensitivity (dH/dT)
+                dHdT = jax.jacrev(periodicity, argnums=1)(X0, T, F)
+                J = np.concatenate((dHdX0, dHdT), axis=1)
+            elif continuation_parameter == "amplitude":
+                # For amplitude continuation, include force amplitude sensitivity (dH/dF)
+                dHdF = jax.jacrev(periodicity, argnums=2)(X0, T, F)
+                # print(f"dHdF: {dHdF}, {dHdF.shape}")
+                J = np.concatenate((dHdX0, dHdF), axis=1)
+            # print(f"J: {J.shape}")
+            # print(f"J: {J}")
+            # print(f"Condition number of Jacobian: {np.linalg.cond(J, p=2)}")
 
-        # solution pose and vel at time 0
-        pose = Xsol[0, :N]
-        vel = Xsol[0, N:]
+            # solution pose and vel at time 0
+            pose = Xsol[0, :N]
+            vel = Xsol[0, N:]
 
-        # Energy calculation
-        energy = 0.0
+            # Energy calculation
+            energy = 0.0
 
-        # Calculate acceleration for full time output
-        acc_time = np.zeros_like(Xsol[:, :N])
-        for i in range(len(t)):
-            x_i = Xsol[i, :N]
-            xdot_i = Xsol[i, N:]
-            force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
-            _Xsol_i = np.concatenate(
-                (x_i[None, :, None], xdot_i[None, :, None]), axis=-1)
-            acc_time[i, :] = cls.pred_acc(
-                _Xsol_i, force_i[None, :, None])[0, :]
+            # Calculate acceleration for full time output
+            acc_time = np.zeros_like(Xsol[:, :N])
+            for i in range(len(t)):
+                x_i = Xsol[i, :N]
+                xdot_i = Xsol[i, N:]
+                force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
+                _Xsol_i = np.concatenate(
+                    (x_i[None, :, None], xdot_i[None, :, None]), axis=-1)
+                acc_time[i, :] = cls.pred_acc(
+                    _Xsol_i, force_i[None, :, None])[0, :]
 
-        if not fulltime:
-            return H, J, pose, vel, energy, True
-        else:
-            return H, J, Xsol[:, :N], Xsol[:, N:], acc_time, energy, True
+            if not fulltime:
+                return H, J, pose, vel, energy, True
+            else:
+                return H, J, Xsol[:, :N], Xsol[:, N:], acc_time, energy, True
+        except Exception as e:
+            print(f"ODE solver failed: {e}")
+            if not fulltime:
+                return None, None, None, None, None, False
+            else:
+                return None, None, None, None, None, None, False
 
     @classmethod
     def get_fe_data(cls):

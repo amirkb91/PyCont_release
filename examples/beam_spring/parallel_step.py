@@ -37,9 +37,9 @@ import json
 num_processes = 4  # Number of parallel processes
 
 # Step parameters (Universal for F or S)
-param_start = 0.1
-param_end = 2.1
-param_step = 0.1
+param_start = 10.0
+param_end = 24.0
+param_step = 0.2
 # =============================================================================
 
 

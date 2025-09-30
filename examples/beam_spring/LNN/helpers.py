@@ -37,39 +37,43 @@ def save_to_file(filename='frequency_step_frequency_', path='results/phys', star
 
     # Loop over all files in directory
     for i in np.arange(start, stop+0.1, step):
-        # Open new file
-        file = f"{path}/{filename}{i:.03f}.h5"
+        try:
+            # Open new file
+            file = f"{path}/{filename}{i:.03f}.h5"
 
-        # -------------------------- READ CONTINUATION FILES
-        # NOTE: COL -> Number of Periodic Solutions, ROW -> Number of Solution Points
-        data = h5py.File(str(file), "r")
-        pose = data["/Config_Time/POSE"][:].squeeze()
-        vel = data["/Config_Time/VELOCITY"][:].squeeze()
-        acc = data["/Config_Time/ACCELERATION"][:].squeeze()
-        time = data["/Config_Time/Time"][:].T
-        F = data["/Force_Amp"][:]
-        T = data["/T"][:]
-        # Compute total force
-        _force = F * np.sin(2 * np.pi / T * time)
-        force = np.concatenate(
-            (_force[np.newaxis, :, :], np.zeros_like(_force[np.newaxis, :, :])), axis=0)
-        # Close file
-        data.close()
+            # -------------------------- READ CONTINUATION FILES
+            # NOTE: COL -> Number of Periodic Solutions, ROW -> Number of Solution Points
+            data = h5py.File(str(file), "r")
+            pose = data["/Config_Time/POSE"][:].squeeze()
+            vel = data["/Config_Time/VELOCITY"][:].squeeze()
+            acc = data["/Config_Time/ACCELERATION"][:].squeeze()
+            time = data["/Config_Time/Time"][:].T
+            F = data["/Force_Amp"][:]
+            T = data["/T"][:]
+            # Compute total force
+            _force = F * np.sin(2 * np.pi / T * time)
+            force = np.concatenate(
+                (_force[np.newaxis, :, :], np.zeros_like(_force[np.newaxis, :, :])), axis=0)
+            # Close file
+            data.close()
 
-        # Check data
-        if check:
-            check_data(pose, vel, acc, force)
+            # Check data
+            if check:
+                check_data(pose, vel, acc, force)
 
-        # ------------------------------- COLLECT DATA
-        ml_data[f"{i:.03f}"] = {
-            "pose": pose,
-            "vel": vel,
-            "acc": acc,
-            "time": time,
-            "F": F,
-            "T": T,
-            "force": force if check else _force
-        }
+            # ------------------------------- COLLECT DATA
+            ml_data[f"{i:.03f}"] = {
+                "pose": pose,
+                "vel": vel,
+                "acc": acc,
+                "time": time,
+                "F": F,
+                "T": T,
+                "force": force if check else _force
+            }
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
 
     # --------------------------------- SAVE DATA
     with open(f"{path}/data.pkl", "wb") as f:

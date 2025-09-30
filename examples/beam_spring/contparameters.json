@@ -3,19 +3,19 @@
     "forced": true,
     "method": "psa",
     "tangent": "keller",
-    "continuation_parameter": "frequency",
+    "continuation_parameter": "amplitude",
     "dir": 1,
-    "npts": 500,
-    "tol": 0.0001,
+    "npts": 1000,
+    "tol": 1e-06,
     "itermin": 1,
     "iteropt": 2,
     "itermax": 4,
     "nadapt": 2,
     "s0": 0.0001,
     "smin": 1e-08,
-    "smax": 0.01,
-    "ContParMin": 10.0,
-    "ContParMax": 24.0,
+    "smax": 0.05,
+    "ContParMin": 0.0,
+    "ContParMax": 7.0,
     "phase_index_unforced": "allvel"
   },
   "shooting": {
@@ -23,12 +23,12 @@
     "rel_tol": 1e-08,
     "single": {
       "nperiod": 1,
-      "nsteps_per_period": 200
+      "nsteps_per_period": 1000
     }
   },
   "forcing": {
-    "amplitude": 0.2,
-    "frequency": 10.0
+    "amplitude": 0.1,
+    "frequency": 23.599999999999998
   },
   "first_point": {
     "from_eig": true,
@@ -47,6 +47,6 @@
   },
   "Logger": {
     "plot": true,
-    "file_name": "amp_step_0.20"
+    "file_name": "freq_step_23.60"
   }
 }

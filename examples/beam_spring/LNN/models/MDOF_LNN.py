@@ -1,6 +1,7 @@
 # Import ML packages
 import jax
 import jax.numpy as jnp
+import jax.scipy.linalg as jspl
 import optax
 import haiku as hk
 from haiku.initializers import VarianceScaling
@@ -93,7 +94,10 @@ class Modal_MLP(hk.Module):
         return self.mlp(x)
 
 
-class Physical_Base_LNN():
+class Modal_Base_LNN():
+    """Base class for Modal LNNs (no prior knowledge)
+    """
+
     def __init__(
         self,
         mnn_module,
@@ -386,7 +390,10 @@ class Physical_Base_LNN():
         return data
 
 
-class Physical_Damped_LNN(Physical_Base_LNN):
+class Modal_Damped_LNN(Modal_Base_LNN):
+    """Modal Damped LNN class (with no prior knowledge)
+    """
+
     def __init__(
         self,
         mnn_module,
@@ -433,7 +440,7 @@ class Physical_Damped_LNN(Physical_Base_LNN):
             GCQ = jnp.tensordot(GC1, q_t.squeeze(), axes=(1))
             # print(f"GCQ: {GCQ.shape}")
 
-            S = KQ - CQ - GCQ - f
+            S = KQ - CQ - GCQ + f
             # print(f"S: {S.shape}")
             invM = jnp.linalg.pinv(MQ)
             q_tt = jnp.tensordot(S, invM, axes=([0, 1], [1, 2]))
@@ -615,6 +622,518 @@ class Physical_Damped_LNN(Physical_Base_LNN):
             D = self.dnn_net.apply(
                 dnn_params, jnp.array([q1_tn, q2_tn]))
             result = M, K, D
+
+            return result
+
+        return predict_accel, predict_energy
+
+
+class Modal_Base_LNN_withPrior():
+    """Base class for Modal LNNs (with prior knowledge)
+    """
+
+    def __init__(
+        self,
+        nn_module,
+        nn_settings,
+        nn_optimizer,
+        info,
+        activation,
+        seed=0
+    ):
+        self.nn_module = nn_module
+        self.nn_settings = nn_settings
+        self.nn_optimizer = nn_optimizer
+        self.info = info
+        self.activation = activation
+        self.key = jax.random.PRNGKey(seed)
+
+    def _compile(self, settings, hk_module, rng, init_data, **kwargs):
+        def forward_fn(x):
+            """Forward pass"""
+            module = hk_module(settings, self.activation, **kwargs)
+            return module(x)
+
+        net = hk.without_apply_rng(hk.transform(forward_fn))
+        params = net.init(rng=rng, x=init_data)
+
+        return params, net
+
+    def gather(self):
+        """Initialize M, K & D as separate networks"""
+        nn_init_data = jnp.zeros(
+            self.nn_settings["input_shape"], dtype=jnp.float32)
+        nn_params, nn_net = self._compile(
+            self.nn_settings, self.nn_module, rng=self.key, init_data=nn_init_data)
+
+        # Assign attributes
+        self.nn_net = nn_net
+        self.nn_init_params = nn_params
+        self.loss = self._loss()
+
+        return self.nn_net
+
+    def _update(self):
+        """Update step"""
+        loss_fn = self._loss()
+        nn_opt = self.nn_optimizer
+        nn_opt_init_state = nn_opt.init(self.nn_init_params)
+
+        @jax.jit
+        def update(nn_params, nn_opt_state, batch, count_idx):
+            # Determine losses & gradients
+            loss_value, nn_grads = jax.value_and_grad(
+                loss_fn, 0)(nn_params, batch, count_idx)
+
+            # Update network states
+            nn_updates, nn_opt_state = nn_opt.update(
+                nn_grads, nn_opt_state, nn_params)
+
+            # Apply updates
+            nn_params = optax.apply_updates(nn_params, nn_updates)
+
+            return nn_params, nn_opt_state, loss_value
+
+        self.update = update
+
+        return nn_opt_init_state
+
+    def init_step(self):
+        """Initial step to get the initial optimizer state"""
+        self.init_nn_opt_state = self._update()
+
+        return self.nn_init_params, self.init_nn_opt_state
+
+    def train_step(self, nn_params, nn_opt_state, batch, count_idx):
+        """Define each training step"""
+        nn_params, nn_opt_state, loss_value = self.update(
+            nn_params, nn_opt_state, batch, count_idx)
+        return nn_params, nn_opt_state, loss_value
+
+    def test_step(self, nn_params, batch, count_idx):
+        """Test step to gauge network's accuracy"""
+        batch_loss = self.loss(
+            nn_params, batch, count_idx)
+        return batch_loss
+
+    def DataIterator(self, X=None, batch=-1, shuffle=False, seed=0):
+        assert type(X) == tuple
+        n = len(X[0])
+        batches = int(jnp.ceil(n/batch))
+        idx = jnp.arange(0, n)
+        if shuffle:
+            rng = jax.random.PRNGKey(seed)
+            idx = jax.random.permutation(rng, idx)
+
+        if batch < 0:
+            yield tuple([x[idx] for x in X])
+        else:
+            for i in range(batches):
+                start = i*batch
+                index = idx[start:start+batch]
+                result = tuple([x[index] for x in X])
+                yield jax.device_put(result)
+
+    def train(self, train_dataset, test_dataset, results=None, epochs=50, show_every=10):
+        """train_dataset: training dataset (jnp.array),
+           test_dataset: test_dataset (jnp.array),
+           results: previous results if continuing training on a previously trained model (dict),
+           epochs: number of desired training epochs (int),
+           show_every: display training and test losses every n epochs (int)
+        """
+        # Initialize LNN & DNN
+        _ = self.gather()
+
+        # Iterator settings
+        train_batch_size = self.nn_settings["train_batch_size"]
+        if self.nn_settings["test_batch_size"] == -1:
+            test_batch_size = test_dataset[0].shape[0]
+        else:
+            test_batch_size = self.nn_settings["test_batch_size"]
+
+        shuffle = self.nn_settings["shuffle"]
+        seed = self.nn_settings["seed"]
+
+        # Results data
+        if results == None:
+            results = {}
+
+        _nn_params, _nn_opt_state = self.init_step()
+
+        nn_params = results.get("nn_params", _nn_params)
+        nn_opt_state = results.get("nn_opt_state", _nn_opt_state)
+        best_nn_params = results.get("best_nn_params", None)
+
+        _metrics = {"train_loss": [], "test_loss": []}
+        metrics = results.get("metrics", _metrics)
+
+        _best_loss = jnp.inf
+        best_loss = results.get("best_loss", _best_loss)
+
+        # Start training loop
+        _start_epoch = 0
+        start_epoch = results.get("last_epoch", _start_epoch)
+
+        start_time = datetime.now()
+
+        for step in range(start_epoch, start_epoch+epochs):
+            # ------------------------train step
+            train_epoch_loss = 0
+            batches = 0
+            train_batches = partial(
+                self.DataIterator, batch=train_batch_size, shuffle=shuffle, seed=seed)
+
+            for train_batch in train_batches(train_dataset):
+                batches += 1
+                nn_params, nn_opt_state, train_batch_loss = self.train_step(
+                    nn_params, nn_opt_state, train_batch, step)
+                train_epoch_loss += train_batch_loss
+
+            train_epoch_loss /= (train_batch_size*batches)
+            metrics["train_loss"].append(train_epoch_loss)
+
+            # --------------------------test step
+            test_epoch_loss = 0
+            test_batches_counter = 0
+            test_batches = partial(
+                self.DataIterator, batch=test_batch_size, shuffle=shuffle, seed=seed)
+
+            for test_batch in test_batches(test_dataset):
+                test_batches_counter += 1
+                test_batch_loss = self.test_step(
+                    nn_params, test_batch, step)
+                test_epoch_loss += test_batch_loss
+
+            test_epoch_loss /= (test_batch_size*test_batches_counter)
+            metrics["test_loss"].append(test_epoch_loss)
+
+            # ----------------------------check loss
+            if test_epoch_loss < best_loss:
+                best_loss = test_epoch_loss
+                best_nn_params = jax.device_get(nn_params)
+
+            # --------------------------update the results dictionary
+            if step % show_every == 0 or step == start_epoch:
+                print(
+                    f"Epoch: {step} | Train Loss: {train_epoch_loss:.8f} | Best Loss: {best_loss:.8f} | Test Loss: {test_epoch_loss:.8f}")
+                print("---------------------------------")
+
+        time_taken = datetime.now() - start_time
+
+        self.best_nn_params = jax.device_get(best_nn_params)
+        self.results = results
+
+        results = {
+            "metrics": jax.device_get(metrics),
+            "best_loss": jax.device_get(best_loss),
+            "nn_params": jax.device_get(nn_params),
+            "best_nn_params": jax.device_get(self.best_nn_params),
+            "nn_opt_state": jax.device_get(nn_opt_state),
+            "last_epoch": jax.device_get(step+1),
+            "time_taken": time_taken.total_seconds()/60,
+            "nn_settings": self.nn_settings,
+            "info": self.info
+        }
+
+        return results
+
+    def plot_results(self, results):
+        X = [step for step in range(results["last_epoch"])]
+        Y1 = results["metrics"]["train_loss"]
+        Y2 = results["metrics"]["test_loss"]
+        plt.plot(X, Y1, label="Training Loss", color="blue")
+        plt.plot(X, Y2, label="Test Loss", color="orange")
+        plt.xlabel("Epochs")
+        plt.ylabel("Losses")
+        plt.legend()
+
+    def save_model(self, results, model_name="", folder_name=""):
+        DATA_DIR = os.path.join(folder_name, model_name)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        model_fn = DATA_DIR + "/" + "model.pkl"
+        metrics_fn = DATA_DIR + "/" + "metrics.pkl"
+
+        pickle.dump(results, open(model_fn, "wb"))
+        pickle.dump(results["metrics"], open(metrics_fn, "wb"))
+
+        return model_fn, metrics_fn
+
+    @staticmethod
+    def load_model(file_name):
+
+        with open(file_name, "rb") as file_cont:
+            data = pickle.load(file_cont)
+
+        return data
+
+
+class Modal_Damped_LNN_withPrior(Modal_Base_LNN_withPrior):
+    """Modal Damped LNN class with prior knowledge
+    """
+
+    def __init__(
+        self,
+        nn_module,
+        nn_settings,
+        nn_optimizer,
+        info,
+        activation,
+        seed=0
+    ):
+        super().__init__(
+            nn_module,
+            nn_settings,
+            nn_optimizer,
+            info,
+            activation,
+            seed)
+
+        # Beam paremeters for 2 mode system
+        w_1 = 91.734505484821950
+        w_2 = 3.066194429903638e02
+        zeta_1 = 0.03
+        zeta_2 = 0.09
+
+        # Modal Matrices
+        self.M = jnp.eye(2)
+        self.C = jnp.array([[2 * zeta_1 * w_1, 0], [0, 2 * zeta_2 * w_2]])
+        self.K = jnp.array([[w_1**2, 0], [0, w_2**2]])
+        self.Minv = jspl.inv(self.M)
+
+    def _eom(self):
+        MQ_ = self.M
+        KQ_ = self.K
+        CQ_ = self.C
+
+        def eom(K_NL, L, x, f):
+            q, q_t = jnp.split(x, 2, axis=-1)
+            # print(f"x: {x.shape}, q: {q.shape}, q_t: {q_t.shape}, f: {f.shape}")
+
+            MQ = jax.hessian(L, 1)(q.squeeze(), q_t.squeeze())  # m
+            KQ = jax.jacobian(L, 0)(q.squeeze(), q_t.squeeze())  # k+k_nl
+            CQ = CQ_  # c
+            print(
+                f"MQ: {MQ.shape}, KQ: {KQ.shape}, CQ: {CQ.shape}")
+
+            # ddL/dqdq_t term in Lagrangian formulation for eom
+            GC1 = jax.jacfwd(jax.jacrev(L, 1), 0)(
+                q.squeeze(), q_t.squeeze())
+            # print(f"GC1: {GC1.shape}")
+
+            GCQ = jnp.tensordot(GC1, q_t.squeeze(), axes=(1))
+            # print(f"GCQ: {GCQ.shape}")
+
+            S = KQ - CQ - GCQ + f
+            # print(f"S: {S.shape}")
+            invM = jspl.inv(MQ)
+            # print(f"invM: {invM.shape}")
+            # q_tt = invM @ S
+            q_tt = jnp.tensordot(S, invM, axes=([0, 1], [1, 2]))
+            # print(f"q_tt: {q_tt.shape}")
+
+            # result = jnp.concatenate([q_t, q_tt], axis=-1)
+
+            return q_tt.squeeze()
+
+        return eom
+
+        # def eom(K_NL, L, x, f):
+        #     q, q_t = jnp.split(x, 2, axis=-1)
+        #     # print(f"x: {x.shape}, q: {q.shape}, q_t: {q_t.shape}, f: {f.shape}")
+
+        #     KQ = KQ_ @ q  # k
+        #     CQ = CQ_ @ q_t  # c
+        #     KQNL = jax.jacobian(K_NL, 0)(q.squeeze(), q_t.squeeze())  # k_nl
+        #     # print(
+        #     #     f"MQ: {MQ_.shape}, KQ: {KQ.shape}, CQ: {CQ.shape}, KQNL: {KQNL.shape}")
+
+        #     # ddL/dqdq_t term in Lagrangian formulation for eom
+        #     GC1 = jax.jacfwd(jax.jacrev(L, 1), 0)(
+        #         q.squeeze(), q_t.squeeze())
+        #     # print(f"GC1: {GC1.shape}")
+
+        #     GCQ = jnp.tensordot(GC1, q_t.squeeze(), axes=(1))
+        #     # print(f"GCQ: {GCQ.shape}")
+
+        #     # S = (KQNL@q) - KQ - CQ - GCQ + f
+        #     S = (KQNL@q) - KQ - CQ + f
+        #     # print(f"S: {S.shape}")
+        #     invM = jspl.inv(MQ_)
+        #     # print(f"invM: {invM.shape}")
+        #     q_tt = invM @ S
+        #     # print(f"q_tt: {q_tt.shape}")
+
+        #     # result = jnp.concatenate([q_t, q_tt], axis=-1)
+
+        #     return q_tt.squeeze()
+
+        # return eom
+
+    def _dynamics(self):
+        nn_net = self.nn_net
+
+        MQ_ = self.M
+        KQ_ = self.K
+        CQ_ = self.C
+
+        q1max = jnp.array([self.info["q1max"]], dtype=jnp.float32)
+        q1min = jnp.array([self.info["q1min"]], dtype=jnp.float32)
+        q1_dmax = jnp.array([self.info["qd1max"]], dtype=jnp.float32)
+        q1_dmin = jnp.array([self.info["qd1min"]], dtype=jnp.float32)
+        q2max = jnp.array([self.info["q2max"]], dtype=jnp.float32)
+        q2min = jnp.array([self.info["q2min"]], dtype=jnp.float32)
+        q2_dmax = jnp.array([self.info["qd2max"]], dtype=jnp.float32)
+        q2_dmin = jnp.array([self.info["qd2min"]], dtype=jnp.float32)
+
+        def dynamics(nn_params):
+            def zeros(x):
+                """Enforce boundary conditions"""
+                z = jnp.zeros_like(x)
+
+                k_nl = nn_net.apply(nn_params, z.flatten())
+                dk_nl = jax.jacobian(nn_net.apply, 1)(
+                    nn_params, z.flatten())
+
+                return k_nl, dk_nl
+
+            def lagrangian(qq, qq_t):
+                """LNN forward step with normalized inputs"""
+                # assert qq.shape == (1,)
+
+                q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
+
+                state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
+                K_NL = nn_net.apply(nn_params, state)
+
+                M = 0.5 * jnp.array([qq_t[0]**2, qq_t[1]**2])
+                K = 0.5 * jnp.array([self.K[0, 0]*qq[0]**2,
+                                    self.K[1, 1]*qq[1]**2])
+                # print(f"M: {M.shape}, K: {K.shape}, K_NL: {K_NL.shape}")
+
+                L = M - K - K_NL
+                # print(f"L: {L.shape}")
+
+                return L
+
+            def nonlinear_stiffness(qq, qq_t):
+                """KNN forward step with normalized inputs"""
+                q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+                q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+                q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+                q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
+
+                state = jnp.concatenate([q1n, q2n, q1_tn, q2_tn], axis=-1)
+                K_NL = nn_net.apply(nn_params, state)
+
+                return K_NL
+
+            def mass_matrix(L, x):
+                """Mass matrix (identity)"""
+                q, q_t = jnp.split(x, 2, axis=-1)
+                MQ = jax.hessian(L, 1)(q.squeeze(), q_t.squeeze())  # m
+                # print(f"MQ: {MQ.shape}")
+
+                return MQ@q_t
+
+            def linear_stiffness(K_NL, L, x):
+                """Linear stiffness matrix"""
+                q, q_t = jnp.split(x, 2, axis=-1)
+                KQ = jax.jacobian(L, 0)(q.squeeze(), q_t.squeeze())  # k+k_nl
+                KQNL = jax.jacobian(K_NL, 0)(
+                    q.squeeze(), q_t.squeeze())  # k_nl
+                # print(f"KQ: {KQ.shape}, KQNL: {KQNL.shape}")
+
+                return KQ - KQNL
+
+            return nonlinear_stiffness, lagrangian, zeros, mass_matrix, linear_stiffness
+
+        return dynamics
+
+    def _loss(self):
+        eom = self._eom()
+        dynamics = self._dynamics()
+
+        @jax.jit
+        def loss_fn(nn_params,
+                    batch,
+                    count_idx):
+            nonlinear_stiffness, lagrangian, zeros, mass_matrix, linear_stiffness = dynamics(
+                nn_params)
+            q, f, q_d = batch
+
+            # Calculate loss terms
+            pred = jax.vmap(
+                partial(eom, nonlinear_stiffness, lagrangian))(q, f)
+            ll, ddl = jax.vmap(partial(zeros))(q)
+            MQ = jax.vmap(partial(mass_matrix, lagrangian))(q)
+            KQ = jax.vmap(partial(linear_stiffness,
+                          nonlinear_stiffness, lagrangian))(q)
+
+            print(
+                f"pred: {pred.shape}, ll: {ll.shape}, ddl: {ddl.shape}, MQ: {MQ.shape}, KQ: {KQ.shape}")
+
+            print(f"q_d: {q_d[:, :, -1].shape}")
+
+            # MSE Calculation
+            # Acceleration
+            pred_mse = jnp.mean(jnp.square(
+                pred - q_d[:, :, -1]))
+            # Known Prior: L(0, 0) = 0 & D(0) = 0
+            ll_mse = jnp.mean(jnp.square(ll))
+            ddl_mse = jnp.mean(jnp.square(ddl))
+            # Mass Matrix should be identity
+            mass_mse = jnp.mean(jnp.square(MQ - jnp.eye(2)))
+            # Linear Stiffness should be equal to linear modal stiffness
+            stiff_mse = jnp.mean(jnp.square(KQ - self.K))
+
+            # Losses
+            loss = pred_mse + ll_mse + ddl_mse + 0*mass_mse + 0*stiff_mse
+
+            return loss
+
+        self.loss = loss_fn
+
+        return self.loss
+
+    def _predict(self, results):
+        nn_params = results["best_nn_params"]
+
+        info = results["info"]
+
+        q1max = info["q1max"]
+        q1min = info["q1min"]
+        q1_dmax = info["qd1max"]
+        q1_dmin = info["qd1min"]
+        q2max = info["q2max"]
+        q2min = info["q2min"]
+        q2_dmax = info["qd2max"]
+        q2_dmin = info["qd2min"]
+
+        _ = self.gather()
+        eom = self._eom()
+        dynamics = self._dynamics()
+        nonlinear_stiffness, lagrangian, _ = dynamics(nn_params)
+
+        @jax.jit
+        def predict_accel(q, f):
+            pred = jax.vmap(
+                partial(eom, nonlinear_stiffness, lagrangian))(q, f)
+            return pred
+
+        @jax.jit
+        def predict_energy(qq, qq_t):
+            q1n = 2*(qq[0] - q1min)/(q1max - q1min) - 1
+            q1_tn = 2*(qq_t[0] - q1_dmin)/(q1_dmax - q1_dmin) - 1
+            q2n = 2*(qq[1] - q2min)/(q2max - q2min) - 1
+            q2_tn = 2*(qq_t[1] - q2_dmin)/(q2_dmax - q2_dmin) - 1
+
+            state = jnp.array([q1n, q2n, q1_tn, q2_tn])
+
+            K_NL = self.nn_net.apply(nn_params, state)
+            result = K_NL
 
             return result
 
