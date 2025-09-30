@@ -196,10 +196,8 @@ def psacont(self):
 
             # Accept the corrected solution
             param_current = get_param_value()
-            X = X_pred.copy()
-            tgt = tgt_next.copy()
-            # X = X_pred
-            # tgt = tgt_next
+            X = X_pred
+            tgt = tgt_next
             itercont += 1
 
         # Adaptive step size for next point

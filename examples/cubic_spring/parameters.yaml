@@ -55,6 +55,7 @@ continuation:
   # Example: "0" for the first velocity DOF, "0:10" for a range (inclusive).
   # Values may be split with ",". Example: 0:10,20:25
   # Setting phase_condition_index: "all" will constrain all velocity DoFs
+  # For forced continuation, this should be an empty string since phase is determined by forcing.
   phase_condition_index: all
 
 # ---------------------------------------------------------------------------- #
@@ -71,11 +72,11 @@ shooting:
 #                           External Forcing Parameters                        #
 # ---------------------------------------------------------------------------- #
 forcing:
-  # Amplitude of the external forcing function.
-  amplitude: 0.1
+  # Forcing amplitude to start forced continuation from.
+  amplitude: 0.5
 
-  # Frequency of the external forcing function.
-  frequency: 0.1
+  # Forcing frequency to start forced continuation from.
+  frequency: 0.2
 
 # ---------------------------------------------------------------------------- #
 #                           Starting Point Configuration                       #

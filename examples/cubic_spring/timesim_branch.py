@@ -1,5 +1,5 @@
 import h5py
-import json
+import yaml
 from alive_progress import alive_bar
 import sys, shutil
 import numpy as np
@@ -13,7 +13,7 @@ run_bif = input("Compute bifurcation functions (y/n)? ")
 if run_bif not in ("y", "n"):
     raise Exception("Input not valid")
 
-# read solution file
+# Read solution file
 file = sys.argv[1]
 inplace = sys.argv[-1]
 if inplace == "-i":
@@ -25,12 +25,12 @@ if not file.endswith(".h5"):
     file += ".h5"
 
 data = h5py.File(str(file), "r")
-pose = data["/Config/POSE"][:]
-vel = data["/Config/VELOCITY"][:]
-T = data["/T"][:]
-F = data["/Force_Amp"][:]
-par = data["/Parameters"]
-par = json.loads(par[()])
+inc = data["Config/INC"][:]
+vel = data["Config/VEL"][:]
+T = data["T"][:]
+F = data["Force_Amp"][:]
+par = data["Parameters"]
+par = yaml.safe_load(par[()])
 data.close()
 
 # create new file to store time histories or append inplace
@@ -41,14 +41,14 @@ else:
     shutil.copy(file, new_file)
 
 n_solpoints = len(T)
-nsteps = par["shooting"]["single"]["nsteps_per_period"]
-pose_time = np.zeros([np.shape(pose)[0], nsteps + 1, n_solpoints])
+nsteps = par["shooting"]["steps_per_period"]
+inc_time = np.zeros([np.shape(inc)[0], nsteps + 1, n_solpoints])
 vel_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
 acc_time = np.zeros([np.shape(vel)[0], nsteps + 1, n_solpoints])
 time = np.zeros([n_solpoints, nsteps + 1])
 
-# run sims
-Cubic_Spring.forcing_parameters(par)
+# Update model and run simulations
+Cubic_Spring.update_model(par)
 if run_bif == "y":
     Floquet = np.zeros([4, n_solpoints], dtype=np.complex128)
     Stability = np.zeros(n_solpoints)
@@ -58,13 +58,13 @@ if run_bif == "y":
 
 with alive_bar(n_solpoints) as bar:
     for i in range(n_solpoints):
-        # Initial conditions for 2-DOF system: [pos1, pos2, vel1, vel2]
-        X = np.array([0.0, 0.0, vel[0, i], vel[1, i]])
-        [_, J, pose_time_series, vel_time_series, acc_time_series, _, _] = Cubic_Spring.time_solve(
-            1.0, F[i], T[i], X, pose[:, i], par, fulltime=True
+        # Prepare initial conditions: concatenate pose and velocity
+        X = np.concatenate([inc[:, i], vel[:, i]])
+        [_, J, pose_time_series, vel_time_series, acc_time_series, _] = Cubic_Spring.time_solve(
+            F[i], T[i], X, par, fulltime=True
         )
         # Store the time series data
-        pose_time[:, :, i] = pose_time_series.T
+        inc_time[:, :, i] = pose_time_series.T
         vel_time[:, :, i] = vel_time_series.T
         acc_time[:, :, i] = acc_time_series.T
 
@@ -79,34 +79,27 @@ with alive_bar(n_solpoints) as bar:
         time[i, :] = np.linspace(0, T[i], nsteps + 1)
         bar()
 
-# write to file
-time_data = h5py.File(new_file, "a")
-if "/Config_Time/POSE" in time_data.keys():
-    del time_data["/Config_Time/POSE"]
-if "/Config_Time/VELOCITY" in time_data.keys():
-    del time_data["/Config_Time/VELOCITY"]
-if "/Config_Time/ACCELERATION" in time_data.keys():
-    del time_data["/Config_Time/ACCELERATION"]
-if "/Config_Time/Time" in time_data.keys():
-    del time_data["/Config_Time/Time"]
-time_data["/Config_Time/POSE"] = pose_time
-time_data["/Config_Time/VELOCITY"] = vel_time
-time_data["/Config_Time/ACCELERATION"] = acc_time
-time_data["/Config_Time/Time"] = time
-if run_bif == "y":
-    if "/Bifurcation/Floquet" in time_data.keys():
-        del time_data["/Bifurcation/Floquet"]
-    if "/Bifurcation/Stability" in time_data.keys():
-        del time_data["/Bifurcation/Stability"]
-    if "/Bifurcation/Fold" in time_data.keys():
-        del time_data["/Bifurcation/Fold"]
-    if "/Bifurcation/Flip" in time_data.keys():
-        del time_data["/Bifurcation/Flip"]
-    if "/Bifurcation/Neimark_Sacker" in time_data.keys():
-        del time_data["/Bifurcation/Neimark_Sacker"]
-    time_data["/Bifurcation/Floquet"] = Floquet
-    time_data["/Bifurcation/Stability"] = Stability
-    time_data["/Bifurcation/Fold"] = Fold
-    time_data["/Bifurcation/Flip"] = Flip
-    time_data["/Bifurcation/Neimark_Sacker"] = Neimark_Sacker
-time_data.close()
+# Write time series data to file
+with h5py.File(new_file, "a") as time_data:
+    # Create or overwrite Config_Time group
+    if "Config_Time" in time_data:
+        del time_data["Config_Time"]
+    time_group = time_data.create_group("Config_Time")
+    time_group.create_dataset("INC", data=inc_time)
+    time_group.create_dataset("VELOCITY", data=vel_time)
+    time_group.create_dataset("ACCELERATION", data=acc_time)
+    time_group.create_dataset("Time", data=time)
+
+    # Write bifurcation data if computed
+    if run_bif == "y":
+        if "Bifurcation" in time_data:
+            del time_data["Bifurcation"]
+        bif_group = time_data.create_group("Bifurcation")
+        bif_group.create_dataset("Floquet", data=Floquet)
+        bif_group.create_dataset("Stability", data=Stability)
+        bif_group.create_dataset("Fold", data=Fold)
+        bif_group.create_dataset("Flip", data=Flip)
+        bif_group.create_dataset("Neimark_Sacker", data=Neimark_Sacker)
+
+print(f"Time simulation complete. Results saved to {new_file}")
+print(f"Processed {n_solpoints} solution points with {nsteps} steps per period.")
