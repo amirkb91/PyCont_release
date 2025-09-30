@@ -3,11 +3,13 @@ import yaml
 from alive_progress import alive_bar
 import sys, shutil
 import numpy as np
-from scipy.integrate import odeint
 from cubic_spring import Cubic_Spring
 from postprocess.bifurcation import bifurcation_functions
 
-""" Run time simulations for all points on solution branch and store """
+""" 
+Computes time-domain simulation data for all solution points along a continuation branch
+and appends the results to the HDF5 solution file for subsequent postprocessing.
+"""
 
 run_bif = input("Compute bifurcation functions (y/n)? ")
 if run_bif not in ("y", "n"):
@@ -60,16 +62,20 @@ with alive_bar(n_solpoints) as bar:
     for i in range(n_solpoints):
         # Prepare initial conditions: concatenate pose and velocity
         X = np.concatenate([inc[:, i], vel[:, i]])
-        [_, J, pose_time_series, vel_time_series, acc_time_series, _] = Cubic_Spring.time_solve(
-            F[i], T[i], X, par, fulltime=True
-        )
+
+        if run_bif == "n":
+            # no need for monodromy
+            _inc, _vel, _acc = Cubic_Spring.time_simulate(F[i], T[i], X, par)
+        elif run_bif == "y":
+            _inc, _vel, _acc, M = Cubic_Spring.time_simulate_with_monodromy(F[i], T[i], X, par)
+
         # Store the time series data
-        inc_time[:, :, i] = pose_time_series.T
-        vel_time[:, :, i] = vel_time_series.T
-        acc_time[:, :, i] = acc_time_series.T
+        inc_time[:, :, i] = _inc.T
+        vel_time[:, :, i] = _vel.T
+        acc_time[:, :, i] = _acc.T
 
         if run_bif == "y":
-            M = J[:, :-1] + np.eye(4)
+            # Compute bifurcation functions
             bifurcation_out = bifurcation_functions(M)
             Floquet[:, i] = bifurcation_out[0]
             Stability[i] = bifurcation_out[1]
@@ -91,9 +97,9 @@ with h5py.File(new_file, "a") as time_data:
     time_group.create_dataset("Time", data=time)
 
     # Write bifurcation data if computed
+    if "Bifurcation" in time_data:
+        del time_data["Bifurcation"]
     if run_bif == "y":
-        if "Bifurcation" in time_data:
-            del time_data["Bifurcation"]
         bif_group = time_data.create_group("Bifurcation")
         bif_group.create_dataset("Floquet", data=Floquet)
         bif_group.create_dataset("Stability", data=Stability)
@@ -102,4 +108,3 @@ with h5py.File(new_file, "a") as time_data:
         bif_group.create_dataset("Neimark_Sacker", data=Neimark_Sacker)
 
 print(f"Time simulation complete. Results saved to {new_file}")
-print(f"Processed {n_solpoints} solution points with {nsteps} steps per period.")

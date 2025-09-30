@@ -1,8 +1,12 @@
+"""
+Visualises the time-domain dynamics of a single solution point from a continuation branch,
+displaying position, velocity, and acceleration as interactive plots.
+"""
+
 import h5py
 import sys
 import yaml
 import numpy as np
-from scipy.integrate import odeint
 from cubic_spring import Cubic_Spring
 import matplotlib.pyplot as plt
 
@@ -44,25 +48,17 @@ except (FileNotFoundError, KeyError) as e:
     print(f"Error reading file {file}: {e}")
     sys.exit(1)
 
-# do time simulation
+# Extract parameters and do time simulation
 par = data["Parameters"]
 par = yaml.safe_load(par[()])
-
-# Extract parameters
-nperiod = 3  # Number of periods to simulate
-nsteps = par["shooting"]["steps_per_period"]
-t = np.linspace(0, T * nperiod, nsteps * nperiod + 1)
-# Prepare initial conditions and perform time simulation
-X = np.concatenate([inc, vel])
 
 # Update the model for forced simulation if needed
 Cubic_Spring.update_model(par)
 
-# Perform time integration using the cubic spring model
-rtol = par["shooting"]["integration_tolerance"]
-timesol = np.array(odeint(Cubic_Spring.model_ode, X, t, args=(T, F), rtol=rtol, tfirst=True))
-inc_time = timesol[:, :2]
-vel_time = timesol[:, 2:]
+# Call time simulation
+X = np.concatenate([inc, vel])
+_inc, _vel, _acc = Cubic_Spring.time_simulate(F, T, X, par)
+t = np.linspace(0, T, _inc.shape[0])
 
 # Close the HDF5 file
 data.close()
@@ -88,21 +84,17 @@ a3.set_xlabel(r"Time (s)", fontsize=14)
 a3.set_ylabel(r"Velocity (m/s)", fontsize=14)
 
 
-a1.plot(t, inc_time[:, 0], "-", label=r"DoF 1", linewidth=1.5)
-a1.plot(t, inc_time[:, 1], "--", label=r"DoF 2", linewidth=1.5)
-a2.plot(inc_time[:, 0], inc_time[:, 1], "-", linewidth=1.5)
-a3.plot(t, vel_time[:, 0], "-", label=r"DoF 1", linewidth=1.5)
-a3.plot(t, vel_time[:, 1], "--", label=r"DoF 2", linewidth=1.5)
+a1.plot(t, _inc[:, 0], "-", label=r"DoF 1", linewidth=1.5)
+a1.plot(t, _inc[:, 1], "--", label=r"DoF 2", linewidth=1.5)
+a2.plot(_inc[:, 0], _inc[:, 1], "-", linewidth=1.5)
+a3.plot(t, _vel[:, 0], "-", label=r"DoF 1", linewidth=1.5)
+a3.plot(t, _vel[:, 1], "--", label=r"DoF 2", linewidth=1.5)
 
 
 a1.legend([r"DoF 1", r"DoF 2"], loc="upper left", fontsize=12)
 a3.legend([r"DoF 1", r"DoF 2"], loc="upper left", fontsize=12)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust rect to leave space for the suptitle
-
-# Print simulation info
-print(f"Simulated {nperiod} periods with {nsteps} steps per period")
-print(f"Total simulation time: {T * nperiod:.4f} seconds")
 
 # Save the plot in vector format (uncomment if needed)
 # plt.savefig(f'timesim_sol{solno}_freq{1/T:.3f}Hz.pdf', format='pdf', dpi=300)

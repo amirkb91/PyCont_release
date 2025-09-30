@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import odeint, simpson
+from scipy.integrate import solve_ivp, simpson
 import scipy.linalg as spl
 
 
@@ -27,23 +27,6 @@ class Cubic_Spring:
             cls.C = 0.05 * cls.M + 0.01 * cls.K
 
     @classmethod
-    def eigen_solve(cls):
-        # Compute eigenvectors and natural frequencies of the model
-        frq, eig = spl.eigh(cls.K, cls.M)
-        frq = np.sqrt(frq) / (2 * np.pi)  # Hz
-
-        # select mode and scaling
-        mode = 1
-        scale = 0.1
-        X0 = scale * eig[:, mode - 1]
-        T0 = 1 / frq[mode - 1]
-
-        # add zeros for velocity degrees of freedom
-        X0 = np.append(X0, np.zeros_like(X0))
-
-        return X0, T0
-
-    @classmethod
     def model_ode(cls, t, X, T, F):
         # State equation of the mass spring system. Xdot(t) = g(X(t))
         x = X[: cls.ndof_free]
@@ -56,7 +39,7 @@ class Cubic_Spring:
         return Xdot
 
     @classmethod
-    def model_sens_ode(cls, t, ic, T, F):
+    def model_ode_with_sens(cls, t, ic, T, F):
         """
         Augmented ODE of model + sensitivities, to be solved together
         System: Xdot(t) = g(X(t))
@@ -111,7 +94,25 @@ class Cubic_Spring:
         return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten(), dXdFdot.flatten()])
 
     @classmethod
-    def time_solve(cls, F, T, X, parameters, fulltime=False):
+    def eigen(cls):
+        # Compute eigenvectors and natural frequencies of the model
+        frq, eig = spl.eigh(cls.K, cls.M)
+        frq = np.sqrt(frq) / (2 * np.pi)  # Hz
+
+        # select mode and scaling
+        mode = 1
+        scale = 0.1
+        X0 = scale * eig[:, mode - 1]
+        T0 = 1 / frq[mode - 1]
+
+        # add zeros for velocity degrees of freedom
+        X0 = np.append(X0, np.zeros_like(X0))
+
+        return X0, T0
+
+    @classmethod
+    def periodicity(cls, F, T, X, parameters):
+        # Compute periodicity function and it's sensitivity
         nsteps = parameters["shooting"]["steps_per_period"]
         rel_tol = parameters["shooting"]["integration_tolerance"]
         continuation_parameter = parameters["continuation"]["parameter"]
@@ -123,9 +124,18 @@ class Cubic_Spring:
         t = np.linspace(0, T, nsteps + 1)
         # Initial conditions for the augmented system: X0, eye for monodromy, zeros for time and force sens
         all_ic = np.concatenate((X, np.eye(n_dof).flatten(), np.zeros(n_dof), np.zeros(n_dof)))
-        sol = np.array(
-            odeint(cls.model_sens_ode, all_ic, t, args=(T, F), rtol=rel_tol, tfirst=True)
+
+        # solve_ivp integration
+        result = solve_ivp(
+            cls.model_ode_with_sens,
+            t_span=[0, T],
+            y0=all_ic,
+            t_eval=t,
+            args=(T, F),
+            rtol=rel_tol,
+            method="RK45",
         )
+        sol = result.y.T
         # unpack solution
         Xsol, M, dXdT, dXdF = (
             sol[:, :n_dof],
@@ -134,7 +144,7 @@ class Cubic_Spring:
             sol[-1, n_dof + n_dof**2 + n_dof :],
         )
 
-        # periodicity condition
+        # Periodicity condition
         H = Xsol[-1, :] - Xsol[0, :]
 
         # Jacobian construction
@@ -166,32 +176,90 @@ class Cubic_Spring:
         E = E0 + E1
         energy = np.max(E)
 
-        # Calculate acceleration for full time output
-        accel = np.zeros_like(Xsol[:, :n_dof_2])
+        return H, J, energy
+
+    @classmethod
+    def time_simulate(cls, F, T, X, parameters):
+        """
+        Perform time simulation only, returning position increment, velocity, and acceleration.
+        """
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation
+        t = np.linspace(0, T, nsteps + 1)
+
+        # solve_ivp integration for system dynamics only
+        result = solve_ivp(
+            cls.model_ode, t_span=[0, T], y0=X, t_eval=t, args=(T, F), rtol=rel_tol, method="RK45"
+        )
+        Xsol = result.y.T
+
+        # Split into position and velocity
+        increment = Xsol[:, :n_dof_2]
+        velocity = Xsol[:, n_dof_2:]
+
+        # Calculate acceleration for all time steps
+        acceleration = np.zeros_like(increment)
         for i in range(len(t)):
-            x_i = Xsol[i, :n_dof_2]
-            xdot_i = Xsol[i, n_dof_2:]
+            x_i = increment[i, :]
+            xdot_i = velocity[i, :]
             KX = cls.K @ x_i
             CXdot = cls.C @ xdot_i
             force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
             fnl_i = np.array([cls.Knl * x_i[0] ** 3, 0])
-            accel[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
+            acceleration[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
 
-        if not fulltime:
-            return H, J, energy
-        else:
-            return H, J, Xsol[:, :n_dof_2], Xsol[:, n_dof_2:], accel, energy
+        return increment, velocity, acceleration
 
     @classmethod
-    def get_fe_data(cls):
-        return {
-            "free_dof": cls.free_dof,
-            "ndof_all": cls.ndof_all,
-            "ndof_fix": cls.ndof_fix,
-            "ndof_free": cls.ndof_free,
-            "nnodes_all": cls.nnodes_all,
-            "config_per_node": cls.config_per_node,
-            "dof_per_node": cls.ndof_free,
-            "n_dim": 1,
-            "SEbeam": False,
-        }
+    def time_simulate_with_monodromy(cls, F, T, X, parameters):
+        """
+        Perform time simulation with monodromy matrix calculation.
+        """
+        nsteps = parameters["shooting"]["steps_per_period"]
+        rel_tol = parameters["shooting"]["integration_tolerance"]
+
+        n_dof = np.size(X)
+        n_dof_2 = n_dof // 2
+
+        # Run time simulation with monodromy matrix calculation
+        t = np.linspace(0, T, nsteps + 1)
+        # Initial conditions: X0 + eye for monodromy + zeros for parameter sensitivities
+        all_ic = np.concatenate((X, np.eye(n_dof).flatten(), np.zeros(n_dof), np.zeros(n_dof)))
+
+        # solve_ivp integration with monodromy (using existing model_ode_with_sens)
+        result = solve_ivp(
+            cls.model_ode_with_sens,
+            t_span=[0, T],
+            y0=all_ic,
+            t_eval=t,
+            args=(T, F),
+            rtol=rel_tol,
+            method="RK45",
+        )
+        sol = result.y.T
+
+        # Unpack solution and monodromy matrix
+        Xsol = sol[:, :n_dof]
+        M = sol[-1, n_dof : n_dof + n_dof**2].reshape(n_dof, n_dof)
+
+        # Split into position and velocity
+        increment = Xsol[:, :n_dof_2]
+        velocity = Xsol[:, n_dof_2:]
+
+        # Calculate acceleration for all time steps
+        acceleration = np.zeros_like(increment)
+        for i in range(len(t)):
+            x_i = increment[i, :]
+            xdot_i = velocity[i, :]
+            KX = cls.K @ x_i
+            CXdot = cls.C @ xdot_i
+            force_i = np.array([F * np.sin(2 * np.pi / T * t[i]), 0])
+            fnl_i = np.array([cls.Knl * x_i[0] ** 3, 0])
+            acceleration[i, :] = cls.Minv @ (-KX - CXdot - fnl_i + force_i)
+
+        return increment, velocity, acceleration, M

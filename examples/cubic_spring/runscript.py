@@ -7,14 +7,14 @@ from cubic_spring import Cubic_Spring
 # Problem
 prob = Problem()
 prob.configure_parameters("parameters.yaml")
-prob.set_zero_function(Cubic_Spring.time_solve)
+prob.set_zero_function(Cubic_Spring.periodicity)
 
 # update model based on parameters
 Cubic_Spring.update_model(prob.parameters)
 
 # Starting point for continuation
 start = StartingPoint(prob.parameters)
-start.set_starting_function(Cubic_Spring.eigen_solve)
+start.set_starting_function(Cubic_Spring.eigen)
 start.get_starting_values()
 
 # Logger to log and store solution

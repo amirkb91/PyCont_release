@@ -31,8 +31,8 @@ a1.grid(True, alpha=0.3)
 # Draw unit circle for stability reference
 theta = np.linspace(0, 2 * np.pi, 1000)
 a1.plot(np.cos(theta), np.sin(theta), "-", color="black", alpha=0.5, linewidth=1)
-a1.set_xlim([-1.5, 1.5])
-a1.set_ylim([-1.5, 1.5])
+a1.set_xlim([-2, 2])
+a1.set_ylim([-2, 2])
 
 # Set up 3D response surface plot (right)
 a2.set_xlabel("Frequency [Hz]")
