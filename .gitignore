@@ -19,4 +19,4 @@ build/
 .lnn_venv/
 .lnn
 
-examples/beam_spring/LNN/MDOF_LNN/Model_freq_update/data.pkl
+examples/beam_spring/LNN/Conx/Model_freq_update/data.pkl
