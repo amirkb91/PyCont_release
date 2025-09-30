@@ -35,12 +35,10 @@ class StartingPoint:
         )
         index = self.parameters["starting_point"]["file_info"]["solution_index"]
 
-        self.T0 = file_data["/T"][index]
-        x0 = file_data["/Config/INC"][:, index]
-        v0 = file_data["/Config/VEL"][:, index]
+        # Read values from file
+        self.T0 = file_data["T"][index]
+        x0 = file_data["Config/INC"][:, index]
+        v0 = file_data["Config/VEL"][:, index]
         self.X0 = np.concatenate([x0, v0])
-
-        try:
-            self.tgt0 = file_data["/Tangent"][:, index]
-        except:
-            self.tgt0 = None
+        self.F0 = file_data["Force_Amp"][index]
+        self.tgt0 = file_data["Tangent"][:, index]

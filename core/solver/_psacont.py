@@ -125,6 +125,7 @@ def psacont(self):
         if converged_now:
             # Compute new tangent with converged solution
             if tangent_predictor == "secant":
+                # Secant tangent based on current and previous solutions
                 tgt_next = np.concatenate((X_pred - X, [get_param_value() - param_current]))
                 tgt_next /= spl.norm(tgt_next)
                 tgt_inner = np.dot(tgt_next, tgt)
