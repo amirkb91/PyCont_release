@@ -11,14 +11,6 @@ class Cubic_Spring:
     K = np.array([[2, -1], [-1, 2]])
     Knl = 0.5
 
-    # finite element data, 2 dof system
-    free_dof = np.array([0, 1])
-    ndof_all = 2
-    ndof_fix = 0
-    ndof_free = 2
-    nnodes_all = 2
-    config_per_node = 1
-
     @classmethod
     def update_model(cls, parameters):
         # update model definition depending on parameters
@@ -29,8 +21,8 @@ class Cubic_Spring:
     @classmethod
     def model_ode(cls, t, X, T, F):
         # State equation of the mass spring system. Xdot(t) = g(X(t))
-        x = X[: cls.ndof_free]
-        xdot = X[cls.ndof_free :]
+        x = X[:2]
+        xdot = X[2:]
         KX = cls.K @ x
         CXdot = cls.C @ xdot
         force = np.array([F * np.sin(2 * np.pi / T * t), 0])
@@ -51,19 +43,20 @@ class Cubic_Spring:
         K = cls.K
         C = cls.C
         knl = cls.Knl
-        N = cls.ndof_free
-        twoN = 2 * N
+
+        n_dof = 4
+        n_dof_2 = 2
 
         # Unpack initial conditions: X0, monodromy sensitivities, time sensitivities, force sensitivities
         X0, dXdX0, dXdT, dXdF = (
-            ic[:twoN],
-            ic[twoN : twoN + twoN**2],
-            ic[twoN + twoN**2 : twoN + twoN**2 + twoN],
-            ic[twoN + twoN**2 + twoN :],
+            ic[:n_dof],
+            ic[n_dof : n_dof + n_dof**2],
+            ic[n_dof + n_dof**2 : n_dof + n_dof**2 + n_dof],
+            ic[n_dof + n_dof**2 + n_dof :],
         )
 
-        x = X0[:N]
-        xdot = X0[N:]
+        x = X0[:n_dof_2]
+        xdot = X0[n_dof_2:]
         KX = K @ x
         CXdot = C @ xdot
         force = np.array([F * np.sin(2 * np.pi / T * t), 0])
@@ -77,19 +70,21 @@ class Cubic_Spring:
         Xdot = np.concatenate((xdot, cls.Minv @ (-KX - CXdot - fnl + force)))
 
         # Jacobian of system dynamics with respect to state
-        dgdX = np.zeros((twoN, twoN))
-        dgdX[:N, N:] = np.eye(N)  # dx/dt = xdot
-        dgdX[N:, :N] = -Minv @ (K + np.array([[knl * 3 * x[0] ** 2, 0], [0, 0]]))  # d(xddot)/dx
-        dgdX[N:, N:] = -Minv @ C  # d(xddot)/d(xdot)
+        dgdX = np.zeros((n_dof, n_dof))
+        dgdX[:n_dof_2, n_dof_2:] = np.eye(n_dof_2)  # dx/dt = xdot
+        dgdX[n_dof_2:, :n_dof_2] = -Minv @ (
+            K + np.array([[knl * 3 * x[0] ** 2, 0], [0, 0]])
+        )  # d(xddot)/dx
+        dgdX[n_dof_2:, n_dof_2:] = -Minv @ C  # d(xddot)/d(xdot)
 
         # Partial derivatives with respect to parameters
-        dgdT = np.concatenate([np.zeros(N), Minv @ dforce_dT])
-        dgdF = np.concatenate([np.zeros(N), Minv @ dforce_dF])
+        dgdT = np.concatenate([np.zeros(n_dof_2), Minv @ dforce_dT])
+        dgdF = np.concatenate([np.zeros(n_dof_2), Minv @ dforce_dF])
 
         # Sensitivity calculations
-        dXdX0dot = dgdX @ dXdX0.reshape(twoN, twoN)
-        dXdTdot = dgdX @ dXdT.reshape(twoN, 1) + dgdT.reshape(-1, 1)
-        dXdFdot = dgdX @ dXdF.reshape(twoN, 1) + dgdF.reshape(-1, 1)
+        dXdX0dot = dgdX @ dXdX0.reshape(n_dof, n_dof)
+        dXdTdot = dgdX @ dXdT.reshape(n_dof, 1) + dgdT.reshape(-1, 1)
+        dXdFdot = dgdX @ dXdF.reshape(n_dof, 1) + dgdF.reshape(-1, 1)
 
         return np.concatenate([Xdot, dXdX0dot.flatten(), dXdTdot.flatten(), dXdFdot.flatten()])
 
