@@ -1,0 +1,108 @@
+# ---------------------------------------------------------------------------- #
+#                      Continuation Parameters                                 #
+# ---------------------------------------------------------------------------- #
+continuation:
+  # Method for the continuation algorithm.
+  # Options: 'pseudo_arclength', 'sequential'.
+  method: pseudo_arclength
+
+  # Tangent predictor strategy for the next solution point.
+  # Options: 'nullspace_previous', 'nullspace_pinned', 'secant'.
+  tangent_predictor: nullspace_previous
+
+  # The primary parameter to vary during continuation.
+  # Options: 'force_amp' (forcing amplitude), 'force_freq' (forcing frequency), 'period'.
+  parameter: force_freq
+
+  # Minimum boundary for the continuation parameter (stopping criteria).
+  min_parameter_value: 0.01
+
+  # Maximum boundary for the continuation parameter (stopping criteria).
+  max_parameter_value: 4.0
+
+  # Direction for continuation along the solution branch.
+  # Options: 1 for increasing parameter, -1 for decreasing.
+  direction: 1
+
+  # Maximum number of points to compute along the solution branch.
+  num_points: 500
+
+  # Convergence tolerance for Newton corrections.
+  corrections_tolerance: 0.0001
+
+  # Minimum number of correction iterations per continuation step.
+  min_iterations: 1
+
+  # Optimal number of correction iterations. The step size is adapted to achieve this value.
+  optimal_iterations: 2
+
+  # Maximum number of correction iterations allowed before reducing the step size.
+  max_iterations: 4
+
+  # The step number at which to begin adaptive step size adjustments.
+  adaptive_step_start: 2
+
+  # Initial step size for the continuation algorithm.
+  initial_step_size: 0.005
+
+  # Minimum allowable step size for the continuation algorithm.
+  min_step_size: 0.001
+
+  # Maximum allowable step size for the continuation algorithm.
+  max_step_size: 2
+
+  # Index/indices of the velocity degrees of freedom used for the phase condition (UNFORCED).
+  # Example: "0" for the first velocity DOF, "0:10" for a range (inclusive).
+  # Values may be split with ",". Example: 0:10,20:25
+  # Setting phase_condition_index: "all" will constrain all velocity DoFs
+  # For forced continuation, this should be an empty string since phase is determined by forcing.
+  phase_condition_index: ""
+
+# ---------------------------------------------------------------------------- #
+#                            Shooting Parameters                               #
+# ---------------------------------------------------------------------------- #
+shooting:
+  # Relative tolerance for the time integration within the shooting method.
+  integration_tolerance: 1e-08
+
+  # Number of time steps to take within each period during simulation.
+  steps_per_period: 300
+
+# ---------------------------------------------------------------------------- #
+#                           External Forcing Parameters                        #
+# ---------------------------------------------------------------------------- #
+forcing:
+  # Forcing amplitude to start forced continuation from.
+  amplitude: 0.5
+
+  # Forcing frequency to start forced continuation from.
+  frequency: 0.05
+
+# ---------------------------------------------------------------------------- #
+#                           Starting Point Configuration                       #
+# ---------------------------------------------------------------------------- #
+starting_point:
+  # Method for obtaining the initial solution point for continuation.
+  # Options: 'function' (compute via a function), 'file' (load from a saved solution).
+  source: function
+
+  # Configuration for when 'source' is set to 'file'.
+  file_info:
+    # Name of the file containing the saved solution.
+    file_name: ""
+
+    # Index of the solution point to use from the file.
+    solution_index: 0
+
+    # If true, recompute the tangent vector at the starting point.
+    recompute_tangent: false
+
+# ---------------------------------------------------------------------------- #
+#                                Logger Settings                               #
+# ---------------------------------------------------------------------------- #
+logger:
+  # If true, display a live plot of the solution branch during continuation.
+  enable_live_plot: true
+
+  # Base name for the output file where solution data will be saved.
+  output_file_name: Sol
