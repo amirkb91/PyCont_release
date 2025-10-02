@@ -1,55 +1,67 @@
-# PyCont Setup Guide
+# PyCont Setup Guide (pyenv)
 
-This project uses a Python virtual environment (`venv`) to manage dependencies cleanly and avoid system conflicts.
+This project uses [pyenv] and [pyenv-virtualenv] to manage Python versions and virtual environments.
 
-## Setup Instructions
+Tested with Python 3.13.7.
 
-1. **Create and activate a virtual environment:**
+## Prerequisites
 
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+- Install pyenv and pyenv-virtualenv (see their docs for your OS):
+  - https://github.com/pyenv/pyenv#installation
+  - https://github.com/pyenv/pyenv-virtualenv#installation
 
-2. **Install dependencies and the project in editable mode:**
+## Setup Instructions (recommended)
 
-   ```bash
-   pip install -r requirements.txt
-   pip install -e .
-   ```
+1. Install Python 3.13.7 via pyenv:
 
-   The `-e .` flag installs the project in *editable mode*, so any code changes are reflected without reinstalling.
+  ```bash
+  pyenv install 3.13.7
+  ```
 
-   You can also install the project without editable mode using:
+2. Create a local virtual environment for this repo and set it as the local version:
 
-   ```bash
-   pip install .
-   ```
+  ```bash
+  pyenv virtualenv 3.13.7 PyCont_venv
+  pyenv local PyCont_venv  # writes .python-version in this directory and points python interpreter to this virtual env
+  python --version            # should show Python 3.13.7
+  pyenv --versions           # should show PyCont_venv
+  ```
 
-## Uninstalling the Package (from venv)
+1. Upgrade pip and build tools:
 
-To remove the installed package (only from the virtual environment):
+  ```bash
+  python -m pip install --upgrade pip setuptools wheel
+  ```
+
+4. Install dependencies and the project (editable mode):
+
+  ```bash
+  pip install -r requirements.txt
+  pip install -e .
+  ```
+
+  The `-e .` flag installs the project in editable mode, so code changes are reflected without reinstalling.
+
+  To install without editable mode:
+
+  ```bash
+  pip install .
+  ```
+
+## Managing the environment (pyenv)
+
+- pyenv will automatically activate the local environment when you `cd` into this directory (due to `.python-version`).
+- If desired, to manually activate/deactivate in a shell session:
+
+  ```bash
+  pyenv activate PyCont_venv
+  pyenv deactivate
+  ```
+
+## Uninstalling the package (from the env)
+
+To remove the installed package (only from the current environment):
 
 ```bash
-pip uninstall -y PyCont_lib
+pip uninstall -y PyCont_lib_release
 ```
-
-## Notes
-
-* You must **activate the virtual environment** every time before working:
-
-  ```bash
-  source venv/bin/activate
-  ```
-
-* To deactivate:
-
-  ```bash
-  deactivate
-  ```
-
-* The `venv/` folder should be excluded from version control. Add this to your `.gitignore`:
-
-  ```
-  venv/
-  ```
