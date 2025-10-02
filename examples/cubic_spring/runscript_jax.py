@@ -2,20 +2,19 @@ from core.problem import Problem
 from core.startingpoint import StartingPoint
 from core.logger import Logger
 from core.solver.continuation import ConX
-
-from beam_spring import Beam_Spring
+from cubic_spring_jax import Cubic_Spring_jax
 
 # Problem
 prob = Problem()
 prob.configure_parameters("parameters.yaml")
-prob.set_zero_function(Beam_Spring.periodicity)
+prob.set_zero_function(Cubic_Spring_jax.periodicity)
 
 # Update model based on parameters if system is forced
-Beam_Spring.update_model(prob.parameters)
+Cubic_Spring_jax.update_model(prob.parameters)
 
 # Starting point for continuation
 start = StartingPoint(prob.parameters)
-start.set_starting_function(Beam_Spring.eigen)
+start.set_starting_function(Cubic_Spring_jax.eigen)
 start.get_starting_values()
 
 # Logger to log and store solution

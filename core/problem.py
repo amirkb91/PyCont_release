@@ -1,149 +1,136 @@
-import os
-import json
-from typing import Union, List, Dict, Any
+import yaml
+from typing import Union, Dict, Any
 
 
-class Prob:
+class Problem:
     def __init__(self):
-        self.cont_params = None
-        self.doffunction = None
-        self.icfunction = None
-        self.zerofunction = None
-        self.zerofunction_firstpoint = None
-        self.partitionfunction = None
+        self.parameters = None
+        self.zero_function = None
 
         # Default parameters as instance variables
         self.defaults = {
             "continuation": {
-                "forced": False,
-                "method": "psa",
-                "tangent": "peeters",
-                "continuation_parameter": "frequency",
-                "dir": 1,
-                "npts": 500,
-                "tol": 0.001,
-                "itermin": 1,
-                "iteropt": 3,
-                "itermax": 5,
-                "iterjac": 1,
-                "nadapt": 2,
-                "s0": 1e-3,
-                "smin": 1e-6,
-                "smax": 1e-1,
-                "betacontrol": False,
-                "betamax": 20,
-                "ContParMin": 20,
-                "ContParMax": 100,
-                "phase_index_unforced": "allvel",
+                "method": "pseudo_arclength",
+                "tangent_predictor": "nullspace_previous",
+                "parameter": "period",
+                "min_parameter_value": 0.1,
+                "max_parameter_value": 30.0,
+                "direction": 1,
+                "num_points": 1500,
+                "corrections_tolerance": 0.0001,
+                "min_iterations": 1,
+                "optimal_iterations": 2,
+                "max_iterations": 4,
+                "adaptive_step_start": 2,
+                "initial_step_size": 0.005,
+                "min_step_size": 0.001,
+                "max_step_size": 1.0,
+                "phase_condition_index": "",
             },
             "shooting": {
-                "method": "single",
-                "scaling": False,
-                "rel_tol": 1e-08,
-                "single": {"nperiod": 1, "nsteps_per_period": 200},
-                "multiple": {"npartition": 3, "nsteps_per_partition": 100},
+                "integration_tolerance": 1e-08,
+                "steps_per_period": 300,
             },
             "forcing": {
-                "amplitude": 1,
-                "frequency": 1,
-                "phase_ratio": 0.5,
-                "tau0": 1e-4,
-                "tau1": 1e-4,
-                "rho_GA": 0.95,
+                "amplitude": 0.1,
+                "frequency": 0.5,
             },
-            "first_point": {
-                "from_eig": True,
-                "itermax": 30,
-                "eig_start": {"NNM": 1, "scale": 0.01},
-                "restart": {
+            "starting_point": {
+                "source": "function",
+                "file_info": {
                     "file_name": "",
-                    "index": 50,
+                    "restart_index": 0,
                     "recompute_tangent": False,
-                    "fixF": False,
-                    "F": 60,
                 },
             },
-            "Logger": {"plot": True, "file_name": "temp"},
+            "logger": {
+                "enable_live_plot": True,
+                "output_file_name": "Sol",
+            },
         }
 
         # Validation schema
         self.schema = {
             "continuation": {
-                "forced": bool,
-                "method": {"type": str, "choices": ["psa", "seq"]},
-                "tangent": {"type": str, "choices": ["peeters", "keller", "secant"]},
-                "continuation_parameter": {"type": str, "choices": ["frequency", "amplitude"]},
-                "dir": {"type": int, "choices": [1, -1]},
-                "npts": {"type": int, "min": 1},
-                "tol": {"type": (int, float), "min": 0},
-                "itermin": {"type": int, "min": 1},
-                "iteropt": {"type": int, "min": 1},
-                "itermax": {"type": int, "min": 1},
-                "iterjac": {"type": int, "min": 1},
-                "nadapt": {"type": int, "min": 1},
-                "s0": {"type": (int, float), "min": 0},
-                "smin": {"type": (int, float), "min": 0},
-                "smax": {"type": (int, float), "min": 0},
-                "betacontrol": bool,
-                "betamax": {"type": (int, float), "min": 0},
-                "ContParMin": {"type": (int, float)},
-                "ContParMax": {"type": (int, float)},
-                "phase_index_unforced": str,
+                "method": {"type": str, "choices": ["pseudo_arclength", "sequential"]},
+                "tangent_predictor": {
+                    "type": str,
+                    "choices": ["nullspace_previous", "nullspace_pinned", "secant"],
+                },
+                "parameter": {"type": str, "choices": ["force_amp", "force_freq", "period"]},
+                "min_parameter_value": {"type": (int, float)},
+                "max_parameter_value": {"type": (int, float)},
+                "direction": {"type": int, "choices": [1, -1]},
+                "num_points": {"type": int, "min": 1},
+                "corrections_tolerance": {"type": (int, float), "min": 0},
+                "min_iterations": {"type": int, "min": 1},
+                "optimal_iterations": {"type": int, "min": 1},
+                "max_iterations": {"type": int, "min": 1},
+                "adaptive_step_start": {"type": int, "min": 0},
+                "initial_step_size": {"type": (int, float), "min": 0},
+                "min_step_size": {"type": (int, float), "min": 0},
+                "max_step_size": {"type": (int, float), "min": 0},
+                "phase_condition_index": str,
             },
             "shooting": {
-                "method": {"type": str, "choices": ["single", "multiple"]},
-                "scaling": bool,
-                "rel_tol": {"type": (int, float), "min": 0},
-                "single": {
-                    "nperiod": {"type": int, "min": 1},
-                    "nsteps_per_period": {"type": int, "min": 1},
-                },
-                "multiple": {
-                    "npartition": {"type": int, "min": 1},
-                    "nsteps_per_partition": {"type": int, "min": 1},
-                },
+                "integration_tolerance": {"type": (int, float), "min": 0},
+                "steps_per_period": {"type": int, "min": 1},
             },
             "forcing": {
                 "amplitude": {"type": (int, float), "min": 0},
                 "frequency": {"type": (int, float), "min": 0},
-                "phase_ratio": {"type": (int, float)},
-                "tau0": {"type": (int, float), "min": 0},
-                "tau1": {"type": (int, float), "min": 0},
-                "rho_GA": {"type": (int, float), "min": 0, "max": 1},
             },
-            "first_point": {
-                "from_eig": bool,
-                "itermax": {"type": int, "min": 1},
-                "eig_start": {
-                    "NNM": {"type": int, "min": 1},
-                    "scale": {"type": (int, float), "min": 0},
-                },
-                "restart": {
+            "starting_point": {
+                "source": {"type": str, "choices": ["function", "file"]},
+                "file_info": {
                     "file_name": str,
-                    "index": {"type": int, "min": 0},
+                    "restart_index": {"type": int, "min": 0},
                     "recompute_tangent": bool,
-                    "fixF": bool,
-                    "F": {"type": (int, float)},
                 },
             },
-            "Logger": {
-                "plot": bool,
-                "file_name": str,
+            "logger": {
+                "enable_live_plot": bool,
+                "output_file_name": str,
             },
         }
 
-    def read_contparams(self, cont_paramfile):
+    def configure_parameters(self, cont_paramfile):
         with open(cont_paramfile) as f:
-            data = json.load(f)
+            data = yaml.safe_load(f)
 
-        self.cont_params = self.fill_defaults(data, self.defaults)
+        self._convert_strings_to_floats(data)
+
+        self.parameters = self.fill_defaults(data, self.defaults)
         self.validate_parameters()
+
+    def _convert_strings_to_floats(self, data: Union[Dict, list]):
+        """
+        Recursively traverse a dictionary or list and convert string values to floats.
+        """
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, str):
+                    try:
+                        data[key] = float(value)
+                    except (ValueError, TypeError):
+                        pass  # Ignore conversion errors
+                elif isinstance(value, (dict, list)):
+                    self._convert_strings_to_floats(value)
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, str):
+                    try:
+                        data[i] = float(item)
+                    except (ValueError, TypeError):
+                        pass  # Ignore conversion errors
+                elif isinstance(item, (dict, list)):
+                    self._convert_strings_to_floats(item)
 
     def validate_parameters(self):
         """
         Validate continuation parameters using schema-based validation
         """
-        self._validate_dict(self.cont_params, self.schema, "")
+        self._validate_dict(self.parameters, self.schema, "")
         self._validate_logical_rules()
 
     def _validate_dict(self, data: Dict, schema: Dict, path: str):
@@ -214,41 +201,40 @@ class Prob:
         """
         Validate logical consistency rules that depend on multiple parameters
         """
-        cont = self.cont_params["continuation"]
+        cont = self.parameters["continuation"]
 
-        # Rule 1: If forced is False, continuation_parameter must be "frequency"
-        if not cont["forced"] and cont["continuation_parameter"] != "frequency":
+        # Rule 1: Iteration consistency
+        if cont["min_iterations"] >= cont["max_iterations"]:
             raise ValueError(
-                "When continuation is not forced (forced=False), "
-                f"continuation_parameter must be 'frequency', not '{cont['continuation_parameter']}'"
+                f"continuation.min_iterations ({cont['min_iterations']}) must be less than max_iterations ({cont['max_iterations']})"
             )
 
-        # Rule 2: Iteration consistency
-        if cont["itermin"] >= cont["itermax"]:
+        if cont["optimal_iterations"] > cont["max_iterations"]:
             raise ValueError(
-                f"continuation.itermin ({cont['itermin']}) must be less than itermax ({cont['itermax']})"
+                f"continuation.optimal_iterations ({cont['optimal_iterations']}) must be <= max_iterations ({cont['max_iterations']})"
             )
 
-        if cont["iteropt"] > cont["itermax"]:
+        # Rule 2: Step size consistency
+        if cont["min_step_size"] >= cont["max_step_size"]:
             raise ValueError(
-                f"continuation.iteropt ({cont['iteropt']}) must be <= itermax ({cont['itermax']})"
+                f"continuation.min_step_size ({cont['min_step_size']}) must be less than max_step_size ({cont['max_step_size']})"
             )
 
-        # Rule 3: Step size consistency
-        if cont["smin"] >= cont["smax"]:
+        if not (cont["min_step_size"] <= cont["initial_step_size"] <= cont["max_step_size"]):
             raise ValueError(
-                f"continuation.smin ({cont['smin']}) must be less than smax ({cont['smax']})"
+                f"continuation.initial_step_size ({cont['initial_step_size']}) must be between min_step_size ({cont['min_step_size']}) and max_step_size ({cont['max_step_size']})"
             )
 
-        if not (cont["smin"] <= cont["s0"] <= cont["smax"]):
+        # Rule 3: ContPar bounds consistency
+        if cont["min_parameter_value"] >= cont["max_parameter_value"]:
             raise ValueError(
-                f"continuation.s0 ({cont['s0']}) must be between smin ({cont['smin']}) and smax ({cont['smax']})"
+                f"continuation.min_parameter_value ({cont['min_parameter_value']}) must be less than max_parameter_value ({cont['max_parameter_value']})"
             )
 
-        # Rule 4: ContPar bounds consistency
-        if cont["ContParMin"] >= cont["ContParMax"]:
+        # Rule 4: Phase condition consistency for forced systems
+        if cont["parameter"] in ["force_freq", "force_amp"] and cont["phase_condition_index"] != "":
             raise ValueError(
-                f"continuation.ContParMin ({cont['ContParMin']}) must be less than ContParMax ({cont['ContParMax']})"
+                f"continuation.phase_condition_index must be empty string for forced continuation (parameter='{cont['parameter']}'), got: '{cont['phase_condition_index']}'"
             )
 
     def fill_defaults(self, data: Dict, defaults: Dict) -> Dict:
@@ -263,21 +249,5 @@ class Prob:
                 result[key] = self.fill_defaults(result[key], value)
         return result
 
-    def add_doffunction(self, fxn):
-        self.doffunction = fxn
-
-    def add_icfunction(self, fxn):
-        self.icfunction = fxn
-
-    def add_zerofunction(self, fxn, fxn2=None):
-        self.zerofunction = fxn
-        if not fxn2:
-            self.zerofunction_firstpoint = fxn
-        else:
-            self.zerofunction_firstpoint = fxn2
-
-    def add_zerofunction_firstpoint(self, fxn):
-        self.zerofunction_firstpoint = fxn
-
-    def add_partitionfunction(self, fxn):
-        self.partitionfunction = fxn
+    def set_zero_function(self, fxn):
+        self.zero_function = fxn

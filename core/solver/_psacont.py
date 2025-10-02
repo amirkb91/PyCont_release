@@ -1,94 +1,98 @@
 import numpy as np
 import scipy.linalg as spl
-from ._cont_step import cont_step
 
 
 def psacont(self):
-    cont_params = self.prob.cont_params
-    cont_params_cont = cont_params["continuation"]
-    frml = cont_params_cont["tangent"].lower()
-    forced = cont_params_cont["forced"]
-    dofdata = self.prob.doffunction()
-    N = dofdata["ndof_free"]
-    twoN = 2 * N
+    """
+    Pseudo-arc length continuation method.
 
-    # first point converged solution
+    This method performs continuation by correcting both the solution variables X,
+    and the continuation parameter (T or F) at predicted values, with corrections
+    made orthogonal to the tangent vector.
+    """
+    # Starting point solution
     X = self.X0
-    pose_base = self.pose
-    pose_ref = self.pose_ref  # undeformed pose
+    T = self.T0
+    F = self.F0
     tgt = self.tgt0
-    tau = self.T0
-    amp = self.F0
 
-    # Set up parameter continuation abstraction
+    # Read parameters
+    parameters = self.prob.parameters
+    continuation_parameter = parameters["continuation"]["parameter"]
+    step_size = parameters["continuation"]["initial_step_size"]
+    max_iterations = parameters["continuation"]["max_iterations"]
+    min_iterations = parameters["continuation"]["min_iterations"]
+    tolerance = parameters["continuation"]["corrections_tolerance"]
+    tangent_predictor = parameters["continuation"]["tangent_predictor"]
+    forced = "force" in parameters["continuation"]["parameter"]
+
+    # Continuation limits
+    max_points = parameters["continuation"]["num_points"]
+    min_param = parameters["continuation"]["min_parameter_value"]
+    max_param = parameters["continuation"]["max_parameter_value"]
+
+    # Set up continuation parameter abstraction and direction
     # fmt: off
-    cont_parameter = cont_params["continuation"]["continuation_parameter"]
-    if cont_parameter == "frequency":
-        param_current = tau
-        def get_param_value(): return tau
-        def set_param_value(val): nonlocal tau; tau = val
-        def get_period(): return tau
-        def get_amplitude(): return amp
-        def get_cont_param_for_bounds(): return 1 / tau  # actual frequency
-    elif cont_parameter == "amplitude":
-        param_current = amp
-        def get_param_value(): return amp
-        def set_param_value(val): nonlocal amp; amp = val
-        def get_period(): return tau
-        def get_amplitude(): return amp
-        def get_cont_param_for_bounds(): return amp
+    if continuation_parameter == "force_freq" or continuation_parameter == "period":
+        param_current = T
+        def get_param_value(): return T
+        def set_param_value(val): nonlocal T; T = val
+        def get_period(): return T
+        def get_amplitude(): return F
+        def get_cont_param_for_bounds(): return 1 / T  # para file bounds are frequency
+        direction = parameters["continuation"]["direction"] * -1
+    elif continuation_parameter == "force_amp":
+        param_current = F
+        def get_param_value(): return F
+        def set_param_value(val): nonlocal F; F = val
+        def get_period(): return T
+        def get_amplitude(): return F
+        def get_cont_param_for_bounds(): return F
+        direction = parameters["continuation"]["direction"]
     # fmt: on
-
-    # continuation parameters
-    step = cont_params_cont["s0"]
-    direction = (
-        cont_params_cont["dir"] * np.sign(tgt[-1]) * (-1 if cont_parameter == "frequency" else 1)
-    )
-
-    # boolean masks to select inc and vel from X
-    inc_mask = np.mod(np.arange(X.size), twoN) < N
-    vel_mask = ~inc_mask
 
     # --- MAIN CONTINUATION LOOP
     itercont = 1
-    while True:
-        # prediction step along tangent
-        param_pred = param_current + tgt[-1] * step * direction
-        X_pred = X + tgt[:-1] * step * direction
+    while itercont <= max_points:
+        # Prediction step along tangent
+        param_pred = param_current + tgt[-1] * step_size * direction
+        X_pred = X + tgt[:-1] * step_size * direction
         set_param_value(param_pred)
 
-        if (
-            get_cont_param_for_bounds() > cont_params_cont["ContParMax"]
-            or get_cont_param_for_bounds() < cont_params_cont["ContParMin"]
-        ):
+        # Check bounds before doing corrections
+        if not (min_param <= get_cont_param_for_bounds() <= max_param):
             print(
-                f"Continuation Parameter {get_cont_param_for_bounds():.2e} outside of specified boundary."
+                f"Continuation parameter {get_cont_param_for_bounds():.2e} outside specified bounds [{min_param:.2e}, {max_param:.2e}]."
             )
             break
 
-        # correction step
+        # Correction iterations
         itercorrect = 0
         while True:
-
-            [H, Jsim, pose, vel, energy, cvg_zerof] = self.prob.zerofunction(
-                1.0, amp, tau, X_pred, pose_base, cont_params
-            )
-            if not cvg_zerof:
-                cvg_cont = False
-                print(f"Zero function failed to converge with step = {step:.3e}.")
+            try:
+                H, J, energy = self.prob.zero_function(
+                    get_amplitude(), get_period(), X_pred, parameters
+                )
+            except Exception as e:
+                print(f"Error evaluating zero function: {e}")
+                converged_now = False
                 break
 
-            residual = spl.norm(H)
-            residual = normalise_residual(residual, pose_base, pose_ref, dofdata)
+            residual = spl.norm(H) / max(spl.norm(X_pred), 1e-12)
 
-            # Augmented Jacobian with phase condition and tangent
-            J = np.block([[Jsim], [self.h, np.zeros((self.nphase, 1))], [tgt]])
-
-            if residual < cont_params_cont["tol"] and itercorrect >= cont_params_cont["itermin"]:
-                cvg_cont = True
+            # Check convergence criteria
+            converged_now = residual < tolerance and itercorrect >= min_iterations
+            if converged_now:
                 break
-            elif itercorrect > cont_params_cont["itermax"] or residual > 1e10:
-                cvg_cont = False
+
+            # Check divergence criteria
+            if residual > 1e10:
+                converged_now = False
+                break
+
+            # Maximum iterations reached
+            if itercorrect >= max_iterations:
+                converged_now = False
                 break
 
             self.log.screenout(
@@ -98,60 +102,71 @@ def psacont(self):
                 freq=1 / get_period(),
                 amp=get_amplitude(),
                 energy=energy,
-                step=direction * step,
+                step=direction * step_size,
             )
 
-            # apply corrections orthogonal to tangent
-            itercorrect += 1
-            Jcr = J.copy()
-            hx = self.h @ X_pred
-            Z = np.vstack([H, hx.reshape(-1, 1), np.zeros(1)])
-            if not forced:
-                dxt = spl.lstsq(Jcr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
-            elif forced:
-                dxt = spl.solve(Jcr, -Z, check_finite=False)
-            param_new = get_param_value() + dxt[-1, 0]
-            set_param_value(param_new)
-            dx = dxt[:-1, 0]
-            X_pred += dx
+            # Compute corrections orthogonal to tangent
+            # Augment the Jacobian with phase condition and tangent
+            J_corr, h = self.add_phase_condition(J)
+            J_corr = np.vstack([J_corr, tgt])
 
-        if cvg_cont:
-            # find new tangent with converged solution
-            if frml == "secant":
-                # As X[inc_mask] = 0 after convergence, X_pred[inc_mask] is already equal to
-                # the difference between current and previous solutions
-                tgt_next = np.concatenate(
-                    (X_pred[inc_mask], (X_pred - X)[vel_mask], [get_param_value() - param_current])
-                )
+            Z = np.concatenate([H, h @ X_pred, np.zeros(1)])
+            if not forced:
+                dxt = spl.lstsq(J_corr, -Z, cond=None, check_finite=False, lapack_driver="gelsd")[0]
+            elif forced:
+                dxt = spl.solve(J_corr, -Z, check_finite=False)
+
+            # Apply correction
+            X_pred += dxt[:-1]
+            param_new = get_param_value() + dxt[-1]
+            set_param_value(param_new)
+            itercorrect += 1
+
+        if converged_now:
+            # Compute new tangent with converged solution
+            if tangent_predictor == "secant":
+                # Secant tangent based on current and previous solutions
+                tgt_next = np.concatenate((X_pred - X, [get_param_value() - param_current]))
                 tgt_next /= spl.norm(tgt_next)
                 tgt_inner = np.dot(tgt_next, tgt)
                 direction = np.sign(direction * tgt_inner)
-            elif frml == "keller":
-                # we already have J[-1, :] = tgt
-                Z = np.zeros((J.shape[0], 1))
+
+            elif tangent_predictor == "nullspace_previous":
+                # Augment the Jacobian with phase condition and tangent
+                # Approximate the null space of the Jacobian using the previous tangent (Keller et al.)
+                J_tgt, _ = self.add_phase_condition(J)
+                J_tgt = np.vstack([J_tgt, tgt])
+
+                Z = np.zeros((J_tgt.shape[0], 1))
                 Z[-1] = 1.0
                 if not forced:
                     tgt_next = spl.lstsq(
-                        J, Z, cond=None, check_finite=False, lapack_driver="gelsd"
+                        J_tgt, Z, cond=None, check_finite=False, lapack_driver="gelsd"
                     )[0][:, 0]
                 elif forced:
-                    tgt_next = spl.solve(J, Z, check_finite=False)[:, 0]
+                    tgt_next = spl.solve(J_tgt, Z, check_finite=False)[:, 0]
                 tgt_next /= spl.norm(tgt_next)
                 tgt_inner = np.dot(tgt_next, tgt)
-                # safeguard: if numerical error yields a negative dot product, flip the tangent
+                # Safeguard: if numerical error yields a negative dot product, flip the tangent
                 if tgt_inner < 0:
                     tgt_next = -tgt_next
-            elif frml == "peeters":
-                J[-1, :] = 0.0
-                J[-1, -1] = 1.0
-                Z = np.zeros((J.shape[0], 1))
-                Z[-1] = 1.0
+
+            elif tangent_predictor == "nullspace_pinned":
+                # Augment the Jacobian with phase condition and tangent
+                # Approximate the null space of the Jacobian while constraining the continuation
+                # parameter component to 1  (Peeters et al.)
+                J_tgt, _ = self.add_phase_condition(J)
+                J_tgt = np.vstack([J_tgt, np.zeros((1, J_tgt.shape[1]))])
+                J_tgt[-1, -1] = 1
+
+                Z = np.zeros((J_tgt.shape[0], 1))
+                Z[-1] = 1
                 if not forced:
                     tgt_next = spl.lstsq(
-                        J, Z, cond=None, check_finite=False, lapack_driver="gelsd"
+                        J_tgt, Z, cond=None, check_finite=False, lapack_driver="gelsd"
                     )[0][:, 0]
                 elif forced:
-                    tgt_next = spl.solve(J, Z, check_finite=False)[:, 0]
+                    tgt_next = spl.solve(J_tgt, Z, check_finite=False)[:, 0]
                 tgt_next /= spl.norm(tgt_next)
                 tgt_inner = np.dot(tgt_next, tgt)
                 direction = np.sign(direction * tgt_inner)
@@ -166,44 +181,33 @@ def psacont(self):
                 freq=1 / get_period(),
                 amp=get_amplitude(),
                 energy=energy,
-                step=direction * step,
+                step=direction * step_size,
                 beta=beta,
-            )
+            )  # need final screenout to print beta
             self.log.store(
-                sol_pose=pose,
-                sol_vel=vel,
+                sol_X=X_pred,
                 sol_T=get_period(),
-                sol_amp=get_amplitude(),
+                sol_F=get_amplitude(),
                 sol_tgt=tgt_next,
                 sol_energy=energy,
                 sol_beta=beta,
                 sol_itercorrect=itercorrect,
-                sol_step=direction * step,
+                sol_step=direction * step_size,
             )
 
+            # Accept the corrected solution
             param_current = get_param_value()
-            X = X_pred.copy()
-            tgt = tgt_next.copy()
-            # update pose_base and set inc to zero, pose will have included inc from current sol
-            pose_base = pose.copy()
-            X[inc_mask] = 0.0
+            X = X_pred
+            tgt = tgt_next
             itercont += 1
 
-        # adaptive step size for next point
-        if itercont > cont_params_cont["nadapt"] or not cvg_cont:
-            step = cont_step(self, step, itercorrect, cvg_cont)
+        # Adaptive step size for next point
+        if itercont > parameters["continuation"]["adaptive_step_start"] or not converged_now:
+            step_size = self.adapt_stepsize(step_size, itercorrect, converged_now)
 
-        if itercont > cont_params_cont["npts"]:
-            print("Maximum number of continuation points reached.")
+        # Early exit if step size becomes too small
+        if abs(step_size) < parameters["continuation"]["min_step_size"]:
+            print("Step size too small. Terminating continuation.")
             break
+
         self.log.screenline("-")
-
-
-def normalise_residual(residual, pose_base, pose_ref, dofdata):
-    ndof_all = dofdata["ndof_all"]
-    n_nodes = dofdata["nnodes_all"]
-    config_per_node = dofdata["config_per_node"]
-    inc_from_ref = np.zeros((ndof_all))
-    pose_base = pose_base.flatten(order="F")
-    inc_from_ref = pose_base[: n_nodes * config_per_node] - pose_ref
-    return residual / spl.norm(inc_from_ref)

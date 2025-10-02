@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import sys
 import h5py
-import json
+import yaml
 import numpy as np
 import mplcursors
 
@@ -13,11 +13,16 @@ def show_annotation(sel, offsets):
     sel.annotation.set_text(f"index:{global_index}")
 
 
-config2plot = 0
+dof_to_plot = 0
 normalise_freq = 1.0
 normalise_amp = 1.0
 
 files = sys.argv[1:]
+if not files:
+    print("Usage: python FRC.py <file1.h5> [file2.h5] ...")
+    sys.exit(1)
+
+# Ensure files have .h5 extension
 for i, file in enumerate(files):
     if not file.endswith(".h5"):
         files[i] += ".h5"
@@ -26,9 +31,9 @@ plt.style.use("ggplot")
 f, a = plt.subplots(figsize=(10, 7))
 a.set(xlabel="F/\u03c9\u2099", ylabel="Normalised Position")
 
-# Color cycle for different files
-color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-color_cycle = color_cycle * ((len(files) // len(color_cycle)) + 1)
+# Optimized color cycle for different files
+colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+color_cycle = (colors * ((len(files) // len(colors)) + 1))[: len(files)]
 
 # Plot solutions
 line_objects = []  # Collect all line objects for cursor interaction
@@ -37,49 +42,63 @@ total_points = 0  # Total number of points plotted
 
 for file, color in zip(files, color_cycle):
     data = h5py.File(str(file), "r")
-    pose_time = data["/Config_Time/POSE"][:]
-    T = data["/T"][:]
-    par = data["/Parameters"]
-    par = json.loads(par[()])
-    forced = par["continuation"]["forced"]
 
+    # Check if Config_Time group exists
+    if "Config_Time" not in data:
+        data.close()
+        print(f"Error: Config_Time data not found in {file}")
+        print(
+            "Please run 'python timesim_branch.py <solution_file>' first to generate time-domain data"
+        )
+        print("This postprocessing script requires time simulation data to calculate amplitudes")
+        sys.exit(1)
+
+    inc_time = data["Config_Time/INC"][:]
+    T = data["T"][:]
+    par = data["Parameters"]
+    par = yaml.safe_load(par[()])
+    forced = "force" in par["continuation"]["parameter"]
+
+    # Optimized amplitude calculation using vectorized operations
     n_solpoints = len(T)
-    amp = np.zeros(n_solpoints)
-    for i in range(n_solpoints):
-        amp[i] = np.max(np.abs(pose_time[config2plot, :, i])) / normalise_amp
+    amp = np.max(np.abs(inc_time[dof_to_plot, :, :]), axis=0) / normalise_amp
 
-    if forced and "/Bifurcation/Stability" in data.keys():
-        stability = data["/Bifurcation/Stability"][:]
-        stable_index = np.argwhere(np.diff(stability)).squeeze() + 1
+    if forced and "Bifurcation/Stability" in data:
+        stability = data["Bifurcation/Stability"][:]
+        stable_index = np.where(np.diff(stability))[0] + 1
 
-        # Handle the case where there are no stability transitions
-        if stable_index.size == 0:
+        # Create segments based on stability transitions
+        if len(stable_index) == 0:
             segments = [np.arange(len(T))]
         else:
-            # Ensure the segments are joined properly
             stable_index = stable_index[stable_index < len(T)]
             segments = np.split(np.arange(len(T)), stable_index)
 
         for i, seg in enumerate(segments):
             linestyle = "solid" if stability[seg[0]] else "dashed"
-            if i > 0:
-                # Include the overlap point between segments
+            if i > 0 and len(seg) > 0:
+                # Include overlap point for continuity
                 seg = np.insert(seg, 0, seg[0] - 1)
+
+            freq_data = 1 / (T[seg] * normalise_freq)
+            amp_data = amp[seg]
+
             (line,) = a.plot(
-                1 / (T[seg] * normalise_freq),
-                amp[seg],
+                freq_data,
+                amp_data,
                 marker="none",
                 linestyle=linestyle,
                 color=color,
                 label=file.split(".h5")[0] if i == 0 else "",
             )
             offsets[line] = total_points
-            total_points += len(seg) - 1  # Correcting for the overlap point
+            total_points += len(seg) - (1 if i > 0 else 0)
             line_objects.append(line)
 
     else:
+        freq_data = 1 / (T * normalise_freq)
         (line,) = a.plot(
-            1 / (T * normalise_freq),
+            freq_data,
             amp,
             marker="none",
             linestyle="solid",
@@ -89,6 +108,8 @@ for file, color in zip(files, color_cycle):
         offsets[line] = total_points
         total_points += len(T)
         line_objects.append(line)
+
+    data.close()
 
 a.legend()
 

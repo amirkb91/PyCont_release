@@ -1,28 +1,27 @@
-from core.problem import Prob
+from core.problem import Problem
+from core.startingpoint import StartingPoint
 from core.logger import Logger
 from core.solver.continuation import ConX
-from core.startingpoint import StartingPoint
-
 from duffing import Duffing
 
 # Problem
-prob = Prob()
-prob.read_contparams("contparameters.json")
-prob.add_doffunction(Duffing.get_fe_data)
-prob.add_icfunction(Duffing.eigen_solve)
+prob = Problem()
+prob.configure_parameters("parameters.yaml")
+prob.set_zero_function(Duffing.periodicity)
 
-prob.add_zerofunction(Duffing.time_solve)
+# Update model based on parameters if system is forced
+Duffing.update_model(prob.parameters)
 
-# Initialise forcing parameters if continuation is forced
-Duffing.forcing_parameters(prob.cont_params)
+# Starting point for continuation
+start = StartingPoint(prob.parameters)
+start.set_starting_function(Duffing.eigen)
+start.get_starting_values()
 
-# Continuation starting point
-start = StartingPoint(prob)
-start.get_startingpoint()
+# Logger to log and store solution
+log = Logger(prob.parameters)
 
-# Logger
-log = Logger(prob)
-
-# Solve continuation on problem
+# Continuation
 con = ConX(prob, start, log)
-con.solve()
+
+# Run continuation on problem
+con.run()
