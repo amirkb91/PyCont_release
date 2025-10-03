@@ -15,7 +15,7 @@
     "smin": 1e-08,
     "smax": 0.05,
     "ContParMin": 0.0,
-    "ContParMax": 7.0,
+    "ContParMax": 8.0,
     "phase_index_unforced": "allvel"
   },
   "shooting": {
@@ -28,7 +28,7 @@
   },
   "forcing": {
     "amplitude": 0.1,
-    "frequency": 23.599999999999998
+    "frequency": 23.99999999999995
   },
   "first_point": {
     "from_eig": true,
@@ -47,6 +47,6 @@
   },
   "Logger": {
     "plot": true,
-    "file_name": "freq_step_23.60"
+    "file_name": "freq_step_24.00"
   }
 }
